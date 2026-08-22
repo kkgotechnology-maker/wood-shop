@@ -611,28 +611,7 @@
     }
 
     // ─── LINE Checkout ──────────────────────────────────────────
-    async function copyToClipboard(text) {
-      try {
-        if (navigator.clipboard && window.isSecureContext) {
-          await navigator.clipboard.writeText(text);
-          return true;
-        }
-      } catch (_) { /* fall through */ }
-
-      const ta = document.createElement('textarea');
-      ta.value = text;
-      ta.setAttribute('readonly', '');
-      ta.style.cssText = 'position:fixed;left:-9999px;top:0';
-      document.body.appendChild(ta);
-      ta.select();
-      ta.setSelectionRange(0, text.length);
-      let ok = false;
-      try { ok = document.execCommand('copy'); } catch (_) { ok = false; }
-      document.body.removeChild(ta);
-      return ok;
-    }
-
-    async function checkout() {
+    function checkout() {
       const items = Object.values(cart);
       if (!items.length) return;
 
@@ -655,16 +634,8 @@
       lines.push('กรุณาติดต่อกลับเพื่อยืนยันคำสั่งซื้อ ขอบคุณครับ 🙏');
 
       const message = lines.join('\n');
-      const copied = await copyToClipboard(message);
-
-      if (copied) {
-        alert('คัดลอกใบสั่งซื้อแล้ว ✓\nเปิด LINE แล้ววางข้อความ (Ctrl+V / กดค้าง → วาง) เพื่อส่งให้ร้าน');
-      } else {
-        alert('ไม่สามารถคัดลอกอัตโนมัติได้\nกรุณาคัดลอกข้อความจากหน้าต่างถัดไปด้วยตนเอง');
-        prompt('คัดลอกข้อความด้านล่าง:', message);
-      }
-
-      window.open('https://line.me/R/ti/p/@770oqmct', '_blank');
+      const lineUrl = `https://line.me/R/oaMessage/@770oqmct/?${encodeURIComponent(message)}`;
+      window.open(lineUrl, '_blank');
     }
 
     // ─── Init ───────────────────────────────────────────────────
