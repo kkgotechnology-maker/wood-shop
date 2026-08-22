@@ -613,7 +613,6 @@
         total += sub;
         lines.push(`${i + 1}. ${product.name}`);
         lines.push(`   จำนวน: ${qty} แผ่น`);
-        lines.push(`   เรท: ${getActiveTierLabel(product, qty)} (${formatPrice(unit)}/แผ่น)`);
         lines.push(`   รวม: ${formatPrice(sub)}`);
       });
 
