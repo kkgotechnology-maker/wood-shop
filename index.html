@@ -1,0 +1,661 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ร้านไม้อัด | Wood Shop</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            wood: {
+              50: '#faf6f1',
+              100: '#f0e6d8',
+              200: '#e0cdb3',
+              300: '#c9a87a',
+              400: '#b8894f',
+              500: '#a06d35',
+              600: '#85562a',
+              700: '#6b4324',
+              800: '#523520',
+              900: '#3d2818',
+            },
+          },
+          fontFamily: {
+            sans: ['"Sarabun"', 'system-ui', 'sans-serif'],
+          },
+        },
+      },
+    };
+  </script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <style>
+    .category-item.active {
+      background: linear-gradient(135deg, #85562a 0%, #a06d35 100%);
+      color: white;
+      box-shadow: 0 4px 14px rgba(133, 86, 42, 0.35);
+    }
+    .product-panel {
+      animation: slideIn 0.25s ease-out;
+    }
+    @keyframes slideIn {
+      from { opacity: 0; transform: translateY(8px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+    .cart-drawer.open { transform: translateX(0); }
+    .cart-overlay.open { opacity: 1; pointer-events: auto; }
+    .scrollbar-thin::-webkit-scrollbar { width: 4px; height: 4px; }
+    .scrollbar-thin::-webkit-scrollbar-thumb { background: #c9a87a; border-radius: 4px; }
+  </style>
+</head>
+<body class="bg-wood-50 font-sans text-wood-900 min-h-screen">
+
+  <!-- Header -->
+  <header class="sticky top-0 z-40 bg-white/90 backdrop-blur-md border-b border-wood-200 shadow-sm">
+    <div class="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
+      <div class="flex items-center gap-3">
+        <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-wood-600 to-wood-400 flex items-center justify-center text-white text-lg font-bold shadow">🪵</div>
+        <div>
+          <h1 class="text-lg font-bold text-wood-800 leading-tight">ร้านไม้อัด</h1>
+          <p class="text-xs text-wood-500">Wood Plywood Shop</p>
+        </div>
+      </div>
+      <button id="cartToggleBtn" class="relative p-2.5 rounded-xl bg-wood-100 hover:bg-wood-200 transition-colors">
+        <svg xmlns="http://www.w3.org/2000/svg" class="w-6 h-6 text-wood-700" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z" />
+        </svg>
+        <span id="cartBadge" class="hidden absolute -top-1 -right-1 w-5 h-5 bg-red-500 text-white text-xs font-bold rounded-full flex items-center justify-center">0</span>
+      </button>
+    </div>
+  </header>
+
+  <!-- Loading -->
+  <div id="loadingScreen" class="fixed inset-0 z-50 bg-wood-50 flex flex-col items-center justify-center gap-4">
+    <div class="w-12 h-12 border-4 border-wood-200 border-t-wood-600 rounded-full animate-spin"></div>
+    <p class="text-wood-600 font-medium">กำลังโหลดข้อมูลสินค้า...</p>
+  </div>
+
+  <!-- Error -->
+  <div id="errorScreen" class="hidden fixed inset-0 z-50 bg-wood-50 flex flex-col items-center justify-center gap-4 px-6 text-center">
+    <div class="text-5xl">⚠️</div>
+    <p class="text-wood-700 font-semibold text-lg">ไม่สามารถโหลดข้อมูลได้</p>
+    <p id="errorMessage" class="text-wood-500 text-sm max-w-md"></p>
+    <button onclick="loadProducts()" class="mt-2 px-6 py-2.5 bg-wood-600 text-white rounded-xl font-medium hover:bg-wood-700 transition">ลองใหม่</button>
+  </div>
+
+  <!-- Main -->
+  <main id="mainContent" class="hidden max-w-7xl mx-auto px-4 py-5">
+    <div class="flex flex-col lg:flex-row gap-5">
+
+      <!-- Category Sidebar (Column A) -->
+      <aside class="lg:w-72 shrink-0">
+        <div class="bg-white rounded-2xl shadow-sm border border-wood-200 overflow-hidden sticky top-[72px]">
+          <div class="px-4 py-3 bg-wood-800 text-white">
+            <h2 class="font-semibold text-sm tracking-wide">ประเภทกลุ่ม</h2>
+            <p class="text-wood-300 text-xs mt-0.5">เลือกหมวดหมู่สินค้า</p>
+          </div>
+          <!-- Mobile: horizontal scroll -->
+          <div id="categoryListMobile" class="lg:hidden flex gap-2 p-3 overflow-x-auto scrollbar-thin"></div>
+          <!-- Desktop: vertical list -->
+          <nav id="categoryList" class="hidden lg:block max-h-[calc(100vh-160px)] overflow-y-auto scrollbar-thin p-2 space-y-1"></nav>
+        </div>
+      </aside>
+
+      <!-- Product List (Column B) -->
+      <section class="flex-1 min-w-0">
+        <div class="bg-white rounded-2xl shadow-sm border border-wood-200 overflow-hidden">
+          <div class="px-5 py-4 border-b border-wood-100 flex items-center justify-between">
+            <div>
+              <h2 id="selectedCategoryTitle" class="font-bold text-wood-800 text-lg">รายการสินค้า</h2>
+              <p id="productCount" class="text-wood-500 text-sm mt-0.5"></p>
+            </div>
+            <span id="categoryBadge" class="hidden sm:inline-flex px-3 py-1 bg-wood-100 text-wood-700 text-xs font-medium rounded-full"></span>
+          </div>
+          <div id="productList" class="p-4 sm:p-5 space-y-4"></div>
+          <div id="emptyState" class="hidden p-12 text-center">
+            <div class="text-4xl mb-3">📦</div>
+            <p class="text-wood-600 font-medium">ยังไม่มีสินค้าในหมวดหมู่นี้</p>
+            <p class="text-wood-400 text-sm mt-1">กรุณาเลือกหมวดหมู่อื่น หรือเพิ่มสินค้าใน Google Sheets</p>
+          </div>
+        </div>
+      </section>
+    </div>
+  </main>
+
+  <!-- Cart Overlay -->
+  <div id="cartOverlay" class="cart-overlay fixed inset-0 bg-black/40 z-40 opacity-0 pointer-events-none transition-opacity duration-300"></div>
+
+  <!-- Cart Drawer -->
+  <aside id="cartDrawer" class="cart-drawer fixed top-0 right-0 h-full w-full sm:w-96 bg-white z-50 shadow-2xl transform translate-x-full transition-transform duration-300 flex flex-col">
+    <div class="px-5 py-4 border-b border-wood-200 flex items-center justify-between bg-wood-800 text-white">
+      <h2 class="font-bold text-lg">ตะกร้าสินค้า</h2>
+      <button id="cartCloseBtn" class="p-1.5 rounded-lg hover:bg-white/10 transition">
+        <svg xmlns="http://www.w3.org/2000/svg" class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+        </svg>
+      </button>
+    </div>
+    <div id="cartItems" class="flex-1 overflow-y-auto p-4 space-y-3 scrollbar-thin"></div>
+    <div id="cartEmpty" class="flex-1 flex flex-col items-center justify-center text-wood-400 p-6">
+      <div class="text-5xl mb-3">🛒</div>
+      <p class="font-medium">ตะกร้าว่าง</p>
+      <p class="text-sm mt-1">เพิ่มสินค้าจากรายการด้านซ้าย</p>
+    </div>
+    <div id="cartFooter" class="hidden border-t border-wood-200 p-5 bg-wood-50 space-y-3">
+      <div class="flex justify-between items-center">
+        <span class="text-wood-600 font-medium">ราคารวมทั้งหมด</span>
+        <span id="cartTotal" class="text-2xl font-bold text-wood-800">฿0</span>
+      </div>
+      <button id="checkoutBtn" class="w-full py-3.5 bg-green-500 hover:bg-green-600 text-white font-bold rounded-xl transition shadow-lg shadow-green-500/25 flex items-center justify-center gap-2">
+        <svg viewBox="0 0 24 24" class="w-5 h-5 fill-current"><path d="M19.365 9.863c.349 0 .63.285.63.631 0 .345-.281.63-.63.63H17.61v1.125h1.755c.349 0 .63.283.63.63 0 .344-.281.629-.63.629h-2.386c-.345 0-.627-.285-.627-.629V8.108c0-.345.282-.63.63-.63h2.386c.349 0 .63.285.63.63 0 .349-.281.63-.63.63H17.61v1.125h1.755zm-3.855 3.016c0 .27-.174.51-.432.596-.064.021-.133.031-.199.031-.211 0-.391-.09-.51-.25l-2.443-3.317v2.94c0 .344-.279.629-.631.629-.346 0-.626-.285-.626-.629V8.108c0-.27.173-.51.43-.595.06-.023.136-.033.194-.033.195 0 .375.104.495.254l2.462 3.33V8.108c0-.345.282-.63.63-.63.345 0 .63.285.63.63v4.771zm-5.741 0c0 .344-.282.629-.631.629-.345 0-.627-.285-.627-.629V8.108c0-.345.282-.63.63-.63.346 0 .628.285.628.63v4.771zm-2.466.629H4.917c-.345 0-.63-.285-.63-.629V8.108c0-.345.285-.63.63-.63.348 0 .63.285.63.63v4.141h1.756c.348 0 .629.283.629.63 0 .344-.282.629-.629.629M24 10.314C24 4.943 18.615.572 12 .572S0 4.943 0 10.314c0 4.811 4.27 8.842 10.035 9.608.391.082.923.258 1.058.59.12.301.079.766.038 1.08l-.164 1.02c-.045.301-.24 1.186 1.049.645 1.291-.539 6.916-4.078 9.436-6.975C23.176 14.393 24 12.458 24 10.314"/></svg>
+        ยืนยันคำสั่งซื้อ (LINE)
+      </button>
+      <button id="clearCartBtn" class="w-full py-2 text-wood-500 hover:text-red-500 text-sm font-medium transition">ล้างตะกร้า</button>
+    </div>
+  </aside>
+
+  <script>
+    // ─── Config ───────────────────────────────────────────────
+    const SHEET_ID = '1mYgdp2nt7ojfLNjFbbQRoNEZoP-flIbAyKxw3wNhNDU';
+    const CSV_URL  = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/export?format=csv`;
+    const GVIZ_URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:json`;
+
+    // ลำดับหมวดหมู่ตามโครงสร้างใน Google Sheets (คอลัมน์ A)
+    const CATEGORY_ORDER = [
+      'ไม้อัดยาง',
+      'ไม้อัดฟิล์มดำ',
+      'ไม้อัดลาย',
+      'ไม้อัดบอร์ดขาว',
+      'ไม้อัดMDFยาง',
+      'ไม้อัดMDFเปลือย',
+      'ไม้อัดปาติเกิ้ล',
+      'ไม้อัดHRM',
+      'ไม้อัดอื่นๆ',
+      'ประตูอัดยาง',
+      'ประตูอัดสัก',
+      'ประตูลูกฟัก',
+    ];
+
+    const CATEGORY_ALIASES = {
+      'ไม้้ฟิล์มดำ': 'ไม้อัดฟิล์มดำ',
+    };
+
+    // ─── State ──────────────────────────────────────────────────
+    let products      = [];
+    let categories    = [];
+    let selectedCat   = null;
+    let cart          = {};   // { productId: { product, qty } }
+    let productQty    = {};   // temp qty per product before adding to cart
+
+    // ─── DOM ────────────────────────────────────────────────────
+    const $ = (sel) => document.querySelector(sel);
+    const loadingScreen  = $('#loadingScreen');
+    const errorScreen    = $('#errorScreen');
+    const mainContent    = $('#mainContent');
+    const categoryList   = $('#categoryList');
+    const categoryListMobile = $('#categoryListMobile');
+    const productList    = $('#productList');
+    const emptyState     = $('#emptyState');
+    const cartDrawer     = $('#cartDrawer');
+    const cartOverlay    = $('#cartOverlay');
+
+    // ─── Parse tier header ──────────────────────────────────────
+    function parseTierHeader(header) {
+      const h = header.trim();
+      const rangeMatch = h.match(/(\d+)\s*-\s*(\d+)/);
+      if (rangeMatch) {
+        return { label: h.replace(/^ราคา\s*/, ''), min: +rangeMatch[1], max: +rangeMatch[2] };
+      }
+      const upMatch = h.match(/(\d+)\s*แผ่นขึ้นไป/);
+      if (upMatch) {
+        return { label: h.replace(/^ราคา\s*/, ''), min: +upMatch[1], max: Infinity };
+      }
+      return null;
+    }
+
+    function normalizeCategory(cat) {
+      return CATEGORY_ALIASES[cat] || cat;
+    }
+
+    // ─── Parse CSV ──────────────────────────────────────────────
+    function parseCSV(text) {
+      const rows = [];
+      let cur = '', inQuote = false;
+      const lines = [];
+
+      for (let i = 0; i < text.length; i++) {
+        const ch = text[i];
+        if (ch === '"') {
+          inQuote = !inQuote;
+        } else if ((ch === '\n' || ch === '\r') && !inQuote) {
+          if (cur || rows.length) { lines.push(cur); cur = ''; }
+          if (ch === '\r' && text[i + 1] === '\n') i++;
+        } else {
+          cur += ch;
+        }
+      }
+      if (cur) lines.push(cur);
+
+      return lines.map(line => {
+        const cols = [];
+        let cell = '', q = false;
+        for (let i = 0; i < line.length; i++) {
+          const c = line[i];
+          if (c === '"') { q = !q; }
+          else if (c === ',' && !q) { cols.push(cell.trim()); cell = ''; }
+          else { cell += c; }
+        }
+        cols.push(cell.trim());
+        return cols;
+      });
+    }
+
+    function buildProductsFromRows(rows) {
+      if (!rows.length) return [];
+
+      const headers = rows[0];
+      const tierDefs = headers.slice(3).map((h, i) => {
+        const parsed = parseTierHeader(h);
+        return parsed ? { ...parsed, colIndex: i + 3 } : null;
+      }).filter(Boolean);
+
+      const result = [];
+      rows.slice(1).forEach((row, idx) => {
+        const name = (row[1] || '').trim();
+        const cat  = normalizeCategory((row[2] || '').trim());
+        if (!name) return;
+
+        const tiers = tierDefs
+          .map(td => {
+            const raw = (row[td.colIndex] || '').replace(/,/g, '').trim();
+            const price = parseFloat(raw);
+            if (!raw || isNaN(price)) return null;
+            return { label: td.label, min: td.min, max: td.max, price };
+          })
+          .filter(Boolean)
+          .sort((a, b) => a.min - b.min);
+
+        result.push({
+          id: `p-${idx}`,
+          name,
+          category: cat,
+          image: (row[0] || '').trim(),
+          tiers,
+        });
+      });
+      return result;
+    }
+
+    // ─── Fetch data ─────────────────────────────────────────────
+    async function fetchCSV() {
+      const res = await fetch(CSV_URL);
+      if (!res.ok) throw new Error(`CSV HTTP ${res.status}`);
+      return res.text();
+    }
+
+    async function fetchGviz() {
+      const res = await fetch(GVIZ_URL);
+      if (!res.ok) throw new Error(`GViz HTTP ${res.status}`);
+      const text = await res.text();
+      const json = JSON.parse(text.substring(47, text.length - 2));
+      const rows = json.table.rows.map(r =>
+        (r.c || []).map(c => (c && c.v != null ? String(c.v) : ''))
+      );
+      return rows;
+    }
+
+    async function loadProducts() {
+      loadingScreen.classList.remove('hidden');
+      errorScreen.classList.add('hidden');
+      mainContent.classList.add('hidden');
+
+      try {
+        let rows;
+        try {
+          const csv = await fetchCSV();
+          rows = parseCSV(csv);
+        } catch {
+          rows = await fetchGviz();
+        }
+
+        products = buildProductsFromRows(rows);
+        buildCategories();
+        initUI();
+        loadingScreen.classList.add('hidden');
+        mainContent.classList.remove('hidden');
+      } catch (err) {
+        loadingScreen.classList.add('hidden');
+        errorScreen.classList.remove('hidden');
+        $('#errorMessage').textContent = err.message || 'เกิดข้อผิดพลาดไม่ทราบสาเหตุ';
+      }
+    }
+
+    // ─── Categories ─────────────────────────────────────────────
+    function buildCategories() {
+      const fromSheet = [...new Set(products.map(p => p.category))];
+      const seen = new Set();
+      categories = [];
+
+      CATEGORY_ORDER.forEach(cat => {
+        const norm = normalizeCategory(cat);
+        if (!seen.has(norm)) {
+          seen.add(norm);
+          categories.push(norm);
+        }
+      });
+      fromSheet.forEach(cat => {
+        if (!seen.has(cat)) {
+          seen.add(cat);
+          categories.push(cat);
+        }
+      });
+
+      if (!selectedCat && categories.length) selectedCat = categories[0];
+    }
+
+    // ─── Pricing ────────────────────────────────────────────────
+    function getUnitPrice(product, qty) {
+      if (!product.tiers.length || qty <= 0) return 0;
+      const applicable = product.tiers.filter(t => qty >= t.min && qty <= t.max);
+      if (!applicable.length) {
+        const below = product.tiers.filter(t => qty >= t.min);
+        return below.length ? below[below.length - 1].price : product.tiers[0].price;
+      }
+      return applicable.reduce((best, t) => (t.min > best.min ? t : best)).price;
+    }
+
+    function getActiveTierLabel(product, qty) {
+      if (!product.tiers.length || qty <= 0) return '-';
+      const applicable = product.tiers.filter(t => qty >= t.min && qty <= t.max);
+      if (!applicable.length) return product.tiers[product.tiers.length - 1].label;
+      return applicable.reduce((best, t) => (t.min > best.min ? t : best)).label;
+    }
+
+    function formatPrice(n) {
+      return '฿' + n.toLocaleString('th-TH', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
+    }
+
+    // ─── Render Categories ──────────────────────────────────────
+    function renderCategories() {
+      const makeBtn = (cat) => {
+        const count = products.filter(p => p.category === cat).length;
+        const btn = document.createElement('button');
+        btn.className = `category-item w-full text-left px-4 py-3 rounded-xl text-sm font-medium transition-all duration-200
+          ${cat === selectedCat ? 'active' : 'text-wood-700 hover:bg-wood-100'}`;
+        btn.innerHTML = `
+          <span class="flex items-center justify-between gap-2">
+            <span class="truncate">${cat}</span>
+            ${count ? `<span class="shrink-0 text-xs px-2 py-0.5 rounded-full ${cat === selectedCat ? 'bg-white/20' : 'bg-wood-100 text-wood-500'}">${count}</span>` : ''}
+          </span>`;
+        btn.addEventListener('click', () => selectCategory(cat));
+        return btn;
+      };
+
+      categoryList.innerHTML = '';
+      categoryListMobile.innerHTML = '';
+      categories.forEach(cat => {
+        categoryList.appendChild(makeBtn(cat));
+        const mobileBtn = makeBtn(cat);
+        mobileBtn.className = `category-item shrink-0 px-4 py-2.5 rounded-full text-sm font-medium transition-all duration-200
+          ${cat === selectedCat ? 'active' : 'text-wood-700 bg-wood-100 hover:bg-wood-200'}`;
+        categoryListMobile.appendChild(mobileBtn);
+      });
+    }
+
+    function selectCategory(cat) {
+      selectedCat = cat;
+      renderCategories();
+      renderProducts();
+    }
+
+    // ─── Render Products ────────────────────────────────────────
+    function renderProducts() {
+      const filtered = products.filter(p => p.category === selectedCat);
+      $('#selectedCategoryTitle').textContent = selectedCat;
+      $('#productCount').textContent = filtered.length ? `${filtered.length} รายการ` : 'ไม่มีสินค้า';
+      const badge = $('#categoryBadge');
+      badge.textContent = selectedCat;
+      badge.classList.remove('hidden');
+
+      if (!filtered.length) {
+        productList.innerHTML = '';
+        productList.classList.add('hidden');
+        emptyState.classList.remove('hidden');
+        return;
+      }
+
+      productList.classList.remove('hidden');
+      emptyState.classList.add('hidden');
+      productList.innerHTML = '';
+
+      filtered.forEach(product => {
+        if (!productQty[product.id]) productQty[product.id] = 1;
+        const qty = productQty[product.id];
+        const unitPrice = getUnitPrice(product, qty);
+        const tierLabel = getActiveTierLabel(product, qty);
+
+        const card = document.createElement('div');
+        card.className = 'product-panel bg-wood-50 rounded-2xl border border-wood-200 p-4 sm:p-5';
+        card.innerHTML = `
+          <div class="flex flex-col sm:flex-row sm:items-start gap-4">
+            <div class="w-full sm:w-16 h-16 rounded-xl bg-wood-200 flex items-center justify-center text-2xl shrink-0">
+              ${product.image ? `<img src="${product.image}" alt="" class="w-full h-full object-cover rounded-xl" onerror="this.parentElement.innerHTML='🪵'">` : '🪵'}
+            </div>
+            <div class="flex-1 min-w-0">
+              <h3 class="font-bold text-wood-800 text-base sm:text-lg">${product.name}</h3>
+              <p class="text-wood-500 text-xs mt-0.5">${product.category}</p>
+
+              <!-- Tier table -->
+              <div class="mt-3 overflow-x-auto scrollbar-thin">
+                <table class="w-full text-xs sm:text-sm">
+                  <thead>
+                    <tr class="text-wood-500">
+                      <th class="text-left py-1.5 pr-3 font-medium">ช่วงจำนวน</th>
+                      <th class="text-right py-1.5 font-medium">ราคา/แผ่น</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    ${product.tiers.map(t => {
+                      const active = qty >= t.min && qty <= t.max;
+                      return `<tr class="${active ? 'bg-wood-200/60 font-semibold text-wood-800' : 'text-wood-600'}">
+                        <td class="py-1.5 pr-3">${t.label}</td>
+                        <td class="py-1.5 text-right">${formatPrice(t.price)}</td>
+                      </tr>`;
+                    }).join('')}
+                  </tbody>
+                </table>
+              </div>
+
+              <!-- Qty + Price -->
+              <div class="mt-4 flex flex-wrap items-center gap-3">
+                <div class="flex items-center bg-white rounded-xl border border-wood-200 overflow-hidden">
+                  <button data-action="dec" data-id="${product.id}" class="qty-btn w-10 h-10 flex items-center justify-center text-wood-600 hover:bg-wood-100 transition text-xl font-bold">−</button>
+                  <input type="number" min="1" value="${qty}" data-id="${product.id}" class="qty-input w-14 h-10 text-center font-semibold text-wood-800 border-x border-wood-200 focus:outline-none" />
+                  <button data-action="inc" data-id="${product.id}" class="qty-btn w-10 h-10 flex items-center justify-center text-wood-600 hover:bg-wood-100 transition text-xl font-bold">+</button>
+                </div>
+                <div class="flex-1 min-w-[140px]">
+                  <p class="text-xs text-wood-500">เรท ${tierLabel} · ${qty} แผ่น</p>
+                  <p class="text-lg font-bold text-wood-700">${formatPrice(unitPrice)} <span class="text-sm font-normal text-wood-500">/ แผ่น</span></p>
+                  <p class="text-sm text-wood-600">รวม <span class="font-semibold">${formatPrice(unitPrice * qty)}</span></p>
+                </div>
+                <button data-action="add" data-id="${product.id}" class="px-5 py-2.5 bg-wood-600 hover:bg-wood-700 text-white font-semibold rounded-xl transition shadow-sm">
+                  + ใส่ตะกร้า
+                </button>
+              </div>
+            </div>
+          </div>`;
+        productList.appendChild(card);
+      });
+
+      bindProductEvents();
+    }
+
+    function bindProductEvents() {
+      document.querySelectorAll('.qty-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const id = btn.dataset.id;
+          const delta = btn.dataset.action === 'inc' ? 1 : -1;
+          productQty[id] = Math.max(1, (productQty[id] || 1) + delta);
+          renderProducts();
+        });
+      });
+
+      document.querySelectorAll('.qty-input').forEach(input => {
+        input.addEventListener('change', () => {
+          const id = input.dataset.id;
+          productQty[id] = Math.max(1, parseInt(input.value, 10) || 1);
+          renderProducts();
+        });
+      });
+
+      document.querySelectorAll('[data-action="add"]').forEach(btn => {
+        btn.addEventListener('click', () => addToCart(btn.dataset.id));
+      });
+    }
+
+    // ─── Cart ───────────────────────────────────────────────────
+    function addToCart(productId) {
+      const product = products.find(p => p.id === productId);
+      if (!product) return;
+      const qty = productQty[productId] || 1;
+
+      if (cart[productId]) {
+        cart[productId].qty += qty;
+      } else {
+        cart[productId] = { product, qty };
+      }
+      updateCartUI();
+      openCart();
+
+      const btn = document.querySelector(`[data-action="add"][data-id="${productId}"]`);
+      if (btn) {
+        btn.textContent = '✓ เพิ่มแล้ว';
+        btn.classList.replace('bg-wood-600', 'bg-green-500');
+        setTimeout(() => {
+          btn.textContent = '+ ใส่ตะกร้า';
+          btn.classList.replace('bg-green-500', 'bg-wood-600');
+        }, 1200);
+      }
+    }
+
+    function updateCartQty(productId, delta) {
+      if (!cart[productId]) return;
+      cart[productId].qty = Math.max(0, cart[productId].qty + delta);
+      if (cart[productId].qty === 0) delete cart[productId];
+      updateCartUI();
+    }
+
+    function updateCartUI() {
+      const items = Object.values(cart);
+      const badge = $('#cartBadge');
+      const totalQty = items.reduce((s, i) => s + i.qty, 0);
+
+      if (totalQty > 0) {
+        badge.textContent = totalQty;
+        badge.classList.remove('hidden');
+      } else {
+        badge.classList.add('hidden');
+      }
+
+      const cartItemsEl = $('#cartItems');
+      const cartEmpty   = $('#cartEmpty');
+      const cartFooter  = $('#cartFooter');
+
+      if (!items.length) {
+        cartItemsEl.innerHTML = '';
+        cartEmpty.classList.remove('hidden');
+        cartFooter.classList.add('hidden');
+        return;
+      }
+
+      cartEmpty.classList.add('hidden');
+      cartFooter.classList.remove('hidden');
+
+      let total = 0;
+      cartItemsEl.innerHTML = items.map(({ product, qty }) => {
+        const unit = getUnitPrice(product, qty);
+        const sub  = unit * qty;
+        total += sub;
+        return `
+          <div class="bg-wood-50 rounded-xl p-3 border border-wood-200">
+            <p class="font-semibold text-wood-800 text-sm leading-snug">${product.name}</p>
+            <p class="text-xs text-wood-500 mt-0.5">เรท ${getActiveTierLabel(product, qty)} · ${formatPrice(unit)}/แผ่น</p>
+            <div class="flex items-center justify-between mt-2">
+              <div class="flex items-center bg-white rounded-lg border border-wood-200 overflow-hidden">
+                <button onclick="updateCartQty('${product.id}', -1)" class="w-8 h-8 flex items-center justify-center hover:bg-wood-100 text-wood-600 font-bold">−</button>
+                <span class="w-10 text-center text-sm font-semibold">${qty}</span>
+                <button onclick="updateCartQty('${product.id}', 1)" class="w-8 h-8 flex items-center justify-center hover:bg-wood-100 text-wood-600 font-bold">+</button>
+              </div>
+              <span class="font-bold text-wood-700">${formatPrice(sub)}</span>
+            </div>
+          </div>`;
+      }).join('');
+
+      $('#cartTotal').textContent = formatPrice(total);
+    }
+
+    function openCart() {
+      cartDrawer.classList.add('open');
+      cartOverlay.classList.add('open');
+      document.body.style.overflow = 'hidden';
+    }
+
+    function closeCart() {
+      cartDrawer.classList.remove('open');
+      cartOverlay.classList.remove('open');
+      document.body.style.overflow = '';
+    }
+
+    // ─── LINE Checkout ──────────────────────────────────────────
+    function checkout() {
+      const items = Object.values(cart);
+      if (!items.length) return;
+
+      let total = 0;
+      const lines = ['🪵 *ใบสั่งซื้อ ร้านไม้อัด*', '─────────────────'];
+
+      items.forEach(({ product, qty }, i) => {
+        const unit = getUnitPrice(product, qty);
+        const sub  = unit * qty;
+        total += sub;
+        lines.push(`${i + 1}. ${product.name}`);
+        lines.push(`   จำนวน: ${qty} แผ่น`);
+        lines.push(`   เรท: ${getActiveTierLabel(product, qty)} (${formatPrice(unit)}/แผ่น)`);
+        lines.push(`   รวม: ${formatPrice(sub)}`);
+      });
+
+      lines.push('─────────────────');
+      lines.push(`💰 *ยอดรวมทั้งหมด: ${formatPrice(total)}*`);
+      lines.push('');
+      lines.push('กรุณาติดต่อกลับเพื่อยืนยันคำสั่งซื้อ ขอบคุณครับ 🙏');
+
+      const message = lines.join('\n');
+      const lineId = "@770oqmct";
+    const lineUrl = `https://line.me/R/ti/p/${lineId}?text=${encodeURIComponent(message)}`;
+    window.open(lineUrl, '_blank');
+    }
+
+    // ─── Init ───────────────────────────────────────────────────
+    function initUI() {
+      renderCategories();
+      renderProducts();
+      updateCartUI();
+    }
+
+    $('#cartToggleBtn').addEventListener('click', openCart);
+    $('#cartCloseBtn').addEventListener('click', closeCart);
+    $('#cartOverlay').addEventListener('click', closeCart);
+    $('#checkoutBtn').addEventListener('click', checkout);
+    $('#clearCartBtn').addEventListener('click', () => {
+      cart = {};
+      updateCartUI();
+    });
+
+    loadProducts();
+  </script>
+</body>
+</html>
