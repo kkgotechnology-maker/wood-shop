@@ -529,16 +529,6 @@
         cart[productId] = { product, qty };
       }
       updateCartUI();
-
-      const btn = document.querySelector(`[data-action="add"][data-id="${productId}"]`);
-      if (btn) {
-        btn.textContent = '✓ เพิ่มแล้ว';
-        btn.classList.replace('bg-wood-600', 'bg-green-500');
-        setTimeout(() => {
-          btn.textContent = '+ ใส่ตะกร้า';
-          btn.classList.replace('bg-green-500', 'bg-wood-600');
-        }, 1200);
-      }
     }
 
     function updateCartQty(productId, delta) {
