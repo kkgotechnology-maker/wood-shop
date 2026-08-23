@@ -232,8 +232,9 @@
       const patterns = [
         /\/file\/d\/([a-zA-Z0-9_-]+)/,
         /[?&]id=([a-zA-Z0-9_-]+)/,
+        /drive\.google\.com\/uc\?[^#]*id=([a-zA-Z0-9_-]+)/,
+        /drive\.google\.com\/open\?[^#]*id=([a-zA-Z0-9_-]+)/,
         /drive\.google\.com\/d\/([a-zA-Z0-9_-]+)/,
-        /drive\.google\.com\/uc\?.*?id=([a-zA-Z0-9_-]+)/,
       ];
       for (const re of patterns) {
         const m = raw.match(re);
@@ -244,25 +245,70 @@
       return raw;
     }
 
+    /** ซ่อนเฉพาะ "ไม่แสดงผล" — แสดงเมื่อเป็น "แสดงผล" หรือเว้นว่าง */
     function isProductVisible(status) {
       const s = (status || '').trim();
-      if (s === 'ไม่แสดงผล') return false;
-      return s === 'แสดงผล';
+      if (!s) return true;
+      if (s.includes('ไม่แสดงผล')) return false;
+      if (s.includes('แสดงผล')) return true;
+      return true;
+    }
+
+    /** ตรวจโครงสร้างคอลัมน์จากหัวตาราง (รองรับชีตใหม่: A สถานะ, B รูป, C ชื่อ, D หมวด, E+ ราคา) */
+    function detectColumnMap(headers) {
+      const h = (headers || []).map(x => String(x || '').replace(/^\uFEFF/, '').trim());
+      const find = (...keys) => h.findIndex(label => keys.some(k => label.includes(k)));
+
+      const statusIdx = find('สถานะ', 'การแสดงผล');
+      const imageIdx  = find('รูปสินค้า', 'รูปภาพ', 'ลิงก์รูป');
+      const nameIdx   = find('รายละเอียดสินค้า', 'ชื่อสินค้า');
+      const catIdx    = find('ประเภทกลุ่ม', 'หมวดหมู่');
+
+      // โครงสร้างใหม่ตามที่กำหนด
+      if (nameIdx === 2 || (statusIdx === 0 && imageIdx === 1)) {
+        return {
+          status: statusIdx >= 0 ? statusIdx : 0,
+          image:  imageIdx  >= 0 ? imageIdx  : 1,
+          name:   nameIdx   >= 0 ? nameIdx   : 2,
+          category: catIdx  >= 0 ? catIdx    : 3,
+          priceStart: Math.max(
+            nameIdx >= 0 ? nameIdx : 2,
+            catIdx  >= 0 ? catIdx  : 3
+          ) + 1,
+        };
+      }
+
+      // โครงสร้างเก่า (ไม่มีคอลัมน์สถานะ): A รูป, B ชื่อ, C หมวด, D+ ราคา
+      if (nameIdx === 1 || (imageIdx === 0 && catIdx === 2)) {
+        return {
+          status: -1,
+          image:  imageIdx >= 0 ? imageIdx : 0,
+          name:   nameIdx  >= 0 ? nameIdx  : 1,
+          category: catIdx >= 0 ? catIdx   : 2,
+          priceStart: Math.max(
+            nameIdx >= 0 ? nameIdx : 1,
+            catIdx  >= 0 ? catIdx  : 2
+          ) + 1,
+        };
+      }
+
+      // ค่าเริ่มต้น = โครงสร้างใหม่
+      return { status: 0, image: 1, name: 2, category: 3, priceStart: 4 };
     }
 
     // ─── Parse CSV ──────────────────────────────────────────────
     function parseCSV(text) {
-      const rows = [];
+      const cleaned = String(text || '').replace(/^\uFEFF/, '');
       let cur = '', inQuote = false;
       const lines = [];
 
-      for (let i = 0; i < text.length; i++) {
-        const ch = text[i];
+      for (let i = 0; i < cleaned.length; i++) {
+        const ch = cleaned[i];
         if (ch === '"') {
           inQuote = !inQuote;
         } else if ((ch === '\n' || ch === '\r') && !inQuote) {
-          if (cur || rows.length) { lines.push(cur); cur = ''; }
-          if (ch === '\r' && text[i + 1] === '\n') i++;
+          if (cur || lines.length) { lines.push(cur); cur = ''; }
+          if (ch === '\r' && cleaned[i + 1] === '\n') i++;
         } else {
           cur += ch;
         }
@@ -280,30 +326,32 @@
         }
         cols.push(cell.trim());
         return cols;
-      });
+      }).filter(row => row.some(c => c !== ''));
     }
 
     function buildProductsFromRows(rows) {
       if (!rows.length) return [];
 
-      // A=สถานะ, B=รูป, C=ชื่อ, D=หมวด, E...=เรทราคา
-      const headers = rows[0];
-      const tierDefs = headers.slice(4).map((h, i) => {
+      const headers = rows[0].map(c => String(c || '').replace(/^\uFEFF/, '').trim());
+      const map = detectColumnMap(headers);
+
+      const tierDefs = headers.slice(map.priceStart).map((h, i) => {
         const parsed = parseTierHeader(h);
-        return parsed ? { ...parsed, colIndex: i + 4 } : null;
+        return parsed ? { ...parsed, colIndex: map.priceStart + i } : null;
       }).filter(Boolean);
 
       const result = [];
       rows.slice(1).forEach((row, idx) => {
-        if (!isProductVisible(row[0])) return;
+        const status = map.status >= 0 ? (row[map.status] || '') : 'แสดงผล';
+        if (!isProductVisible(status)) return;
 
-        const name = (row[2] || '').trim();
-        const cat  = normalizeCategory((row[3] || '').trim());
+        const name = (row[map.name] || '').trim();
+        const cat  = normalizeCategory((row[map.category] || '').trim());
         if (!name) return;
 
         const tiers = tierDefs
           .map(td => {
-            const raw = (row[td.colIndex] || '').replace(/,/g, '').trim();
+            const raw = String(row[td.colIndex] || '').replace(/,/g, '').trim();
             const price = parseFloat(raw);
             if (!raw || isNaN(price)) return null;
             return { label: td.label, min: td.min, max: td.max, price };
@@ -315,7 +363,7 @@
           id: `p-${idx}`,
           name,
           category: cat,
-          image: toDriveImageUrl(row[1]),
+          image: toDriveImageUrl(row[map.image]),
           tiers,
         });
       });
@@ -326,18 +374,31 @@
     async function fetchCSV() {
       const res = await fetch(CSV_URL);
       if (!res.ok) throw new Error(`CSV HTTP ${res.status}`);
-      return res.text();
+      const text = await res.text();
+      if (/^\s*<(!DOCTYPE|html)/i.test(text)) throw new Error('CSV returned HTML');
+      return text;
     }
 
     async function fetchGviz() {
       const res = await fetch(GVIZ_URL);
       if (!res.ok) throw new Error(`GViz HTTP ${res.status}`);
       const text = await res.text();
-      const json = JSON.parse(text.substring(47, text.length - 2));
-      const rows = json.table.rows.map(r =>
-        (r.c || []).map(c => (c && c.v != null ? String(c.v) : ''))
-      );
-      return rows;
+      const start = text.indexOf('{');
+      const end = text.lastIndexOf('}');
+      if (start < 0 || end < 0) throw new Error('Invalid GViz response');
+      const json = JSON.parse(text.slice(start, end + 1));
+      const colCount = (json.table.cols || []).length;
+      const headers = (json.table.cols || []).map(c => (c.label || c.id || '').trim());
+      const dataRows = (json.table.rows || []).map(r => {
+        const cells = r.c || [];
+        const row = [];
+        for (let i = 0; i < Math.max(colCount, cells.length); i++) {
+          const c = cells[i];
+          row.push(c && c.v != null ? String(c.v) : '');
+        }
+        return row;
+      });
+      return [headers, ...dataRows];
     }
 
     async function loadProducts() {
@@ -368,7 +429,7 @@
 
     // ─── Categories ─────────────────────────────────────────────
     function buildCategories() {
-      const fromSheet = [...new Set(products.map(p => p.category))];
+      const fromSheet = [...new Set(products.map(p => p.category).filter(Boolean))];
       const seen = new Set();
       categories = [];
 
@@ -386,7 +447,10 @@
         }
       });
 
-      if (!selectedCat && categories.length) selectedCat = categories[0];
+      const firstWithProducts = categories.find(c => products.some(p => p.category === c));
+      if (!selectedCat || !products.some(p => p.category === selectedCat)) {
+        selectedCat = firstWithProducts || categories[0] || null;
+      }
     }
 
     // ─── Pricing ────────────────────────────────────────────────
