@@ -221,6 +221,35 @@
       return CATEGORY_ALIASES[cat] || cat;
     }
 
+    /** แปลงลิงก์ Google Drive เป็นลิงก์แสดงรูปตรง (ว่าง = คืนค่าว่าง) */
+    function toDriveImageUrl(url) {
+      const raw = (url || '').trim();
+      if (!raw) return '';
+
+      if (/lh3\.googleusercontent\.com\/d\//i.test(raw)) return raw;
+
+      let id = null;
+      const patterns = [
+        /\/file\/d\/([a-zA-Z0-9_-]+)/,
+        /[?&]id=([a-zA-Z0-9_-]+)/,
+        /drive\.google\.com\/d\/([a-zA-Z0-9_-]+)/,
+        /drive\.google\.com\/uc\?.*?id=([a-zA-Z0-9_-]+)/,
+      ];
+      for (const re of patterns) {
+        const m = raw.match(re);
+        if (m) { id = m[1]; break; }
+      }
+
+      if (id) return `https://lh3.googleusercontent.com/d/${id}`;
+      return raw;
+    }
+
+    function isProductVisible(status) {
+      const s = (status || '').trim();
+      if (s === 'ไม่แสดงผล') return false;
+      return s === 'แสดงผล';
+    }
+
     // ─── Parse CSV ──────────────────────────────────────────────
     function parseCSV(text) {
       const rows = [];
@@ -257,16 +286,19 @@
     function buildProductsFromRows(rows) {
       if (!rows.length) return [];
 
+      // A=สถานะ, B=รูป, C=ชื่อ, D=หมวด, E...=เรทราคา
       const headers = rows[0];
-      const tierDefs = headers.slice(3).map((h, i) => {
+      const tierDefs = headers.slice(4).map((h, i) => {
         const parsed = parseTierHeader(h);
-        return parsed ? { ...parsed, colIndex: i + 3 } : null;
+        return parsed ? { ...parsed, colIndex: i + 4 } : null;
       }).filter(Boolean);
 
       const result = [];
       rows.slice(1).forEach((row, idx) => {
-        const name = (row[1] || '').trim();
-        const cat  = normalizeCategory((row[2] || '').trim());
+        if (!isProductVisible(row[0])) return;
+
+        const name = (row[2] || '').trim();
+        const cat  = normalizeCategory((row[3] || '').trim());
         if (!name) return;
 
         const tiers = tierDefs
@@ -283,7 +315,7 @@
           id: `p-${idx}`,
           name,
           category: cat,
-          image: (row[0] || '').trim(),
+          image: toDriveImageUrl(row[1]),
           tiers,
         });
       });
@@ -442,8 +474,10 @@
         card.className = 'product-panel bg-wood-50 rounded-2xl border border-wood-200 p-4 sm:p-5';
         card.innerHTML = `
           <div class="flex flex-col sm:flex-row sm:items-start gap-4">
-            <div class="w-full sm:w-16 h-16 rounded-xl bg-wood-200 flex items-center justify-center text-2xl shrink-0">
-              ${product.image ? `<img src="${product.image}" alt="" class="w-full h-full object-cover rounded-xl" onerror="this.parentElement.innerHTML='🪵'">` : '🪵'}
+            <div class="w-full sm:w-16 h-16 rounded-xl bg-wood-200 flex items-center justify-center text-2xl shrink-0 overflow-hidden">
+              ${product.image
+                ? `<img src="${product.image.replace(/"/g, '&quot;')}" alt="${product.name.replace(/"/g, '&quot;')}" class="w-full h-full object-cover" loading="lazy" onerror="this.replaceWith(document.createTextNode('🪵'))">`
+                : '🪵'}
             </div>
             <div class="flex-1 min-w-0">
               <h3 class="font-bold text-wood-800 text-base sm:text-lg">${product.name}</h3>
