@@ -164,32 +164,40 @@
     const CSV_URL  = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/export?format=csv`;
     const GVIZ_URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:json`;
 
-    // ลำดับหมวดหมู่ตามโครงสร้างใน Google Sheets (คอลัมน์ A)
+    // ลำดับหมวดหมู่ตามคอลัมน์ D ในชีต (แสดงเฉพาะหมวดที่มีสินค้า)
     const CATEGORY_ORDER = [
       'ไม้อัดยาง',
       'ไม้อัดฟิล์มดำ',
-      'ไม้อัดลาย',
-      'ไม้อัดบอร์ดขาว',
+      'ไม้บอร์ดลาย/ขาว',
+      'ไม้อัดตกแต่งภายใน',
       'ไม้อัดMDFยาง',
       'ไม้อัดMDFเปลือย',
       'ไม้อัดปาติเกิ้ล',
-      'ไม้อัดHRM',
-      'ไม้อัดอื่นๆ',
-      'ประตูอัดยาง',
-      'ประตูอัดสัก',
+      'ไม้อัดHMR',
+      'กลุ่มอื่นๆ',
+      'ประตููไม้อัดยาง',
+      'ประตูไม้อัดยาง',
+      'ประตููไม้อัดสัก',
+      'ประตูไม้อัดสัก',
       'ประตูลูกฟัก',
     ];
 
     const CATEGORY_ALIASES = {
       'ไม้้ฟิล์มดำ': 'ไม้อัดฟิล์มดำ',
+      'ประตููไม้อัดยาง': 'ประตูไม้อัดยาง',
+      'ประตููไม้อัดสัก': 'ประตูไม้อัดสัก',
+      'ไม้อัดHRM': 'ไม้อัดHMR',
     };
+
+    // คอลัมน์คงที่ตามชีตใหม่
+    const COL = { status: 0, image: 1, name: 2, category: 3, priceStart: 4 };
 
     // ─── State ──────────────────────────────────────────────────
     let products      = [];
     let categories    = [];
     let selectedCat   = null;
-    let cart          = {};   // { productId: { product, qty } }
-    let productQty    = {};   // temp qty per product before adding to cart
+    let cart          = {};
+    let productQty    = {};
 
     // ─── DOM ────────────────────────────────────────────────────
     const $ = (sel) => document.querySelector(sel);
@@ -205,12 +213,13 @@
 
     // ─── Parse tier header ──────────────────────────────────────
     function parseTierHeader(header) {
-      const h = header.trim();
+      const h = String(header || '').trim();
+      if (!h) return null;
       const rangeMatch = h.match(/(\d+)\s*-\s*(\d+)/);
       if (rangeMatch) {
         return { label: h.replace(/^ราคา\s*/, ''), min: +rangeMatch[1], max: +rangeMatch[2] };
       }
-      const upMatch = h.match(/(\d+)\s*แผ่นขึ้นไป/);
+      const upMatch = h.match(/(\d+)\s*(?:แผ่น|ตัว|บาน)?\s*(?:ขึ้นไป|ชึ้นไป|ขึ่นไป)/);
       if (upMatch) {
         return { label: h.replace(/^ราคา\s*/, ''), min: +upMatch[1], max: Infinity };
       }
@@ -221,10 +230,18 @@
       return CATEGORY_ALIASES[cat] || cat;
     }
 
-    /** แปลงลิงก์ Google Drive เป็นลิงก์แสดงรูปตรง (ว่าง = คืนค่าว่าง) */
+    function looksLikeUrl(s) {
+      return /^https?:\/\//i.test(s) || /drive\.google\.com/i.test(s);
+    }
+
+    function looksLikeNumber(s) {
+      return /^\d+([.,]\d+)?$/.test(String(s || '').trim());
+    }
+
+    /** แปลงลิงก์ Google Drive → ลิงก์แสดงรูป (ว่างได้) */
     function toDriveImageUrl(url) {
       const raw = (url || '').trim();
-      if (!raw) return '';
+      if (!raw || !looksLikeUrl(raw)) return '';
 
       if (/lh3\.googleusercontent\.com\/d\//i.test(raw)) return raw;
 
@@ -234,66 +251,41 @@
         /[?&]id=([a-zA-Z0-9_-]+)/,
         /drive\.google\.com\/uc\?[^#]*id=([a-zA-Z0-9_-]+)/,
         /drive\.google\.com\/open\?[^#]*id=([a-zA-Z0-9_-]+)/,
-        /drive\.google\.com\/d\/([a-zA-Z0-9_-]+)/,
       ];
       for (const re of patterns) {
         const m = raw.match(re);
         if (m) { id = m[1]; break; }
       }
-
       if (id) return `https://lh3.googleusercontent.com/d/${id}`;
       return raw;
     }
 
-    /** ซ่อนเฉพาะ "ไม่แสดงผล" — แสดงเมื่อเป็น "แสดงผล" หรือเว้นว่าง */
     function isProductVisible(status) {
       const s = (status || '').trim();
-      if (!s) return true;
       if (s.includes('ไม่แสดงผล')) return false;
-      if (s.includes('แสดงผล')) return true;
       return true;
     }
 
-    /** ตรวจโครงสร้างคอลัมน์จากหัวตาราง (รองรับชีตใหม่: A สถานะ, B รูป, C ชื่อ, D หมวด, E+ ราคา) */
-    function detectColumnMap(headers) {
-      const h = (headers || []).map(x => String(x || '').replace(/^\uFEFF/, '').trim());
-      const find = (...keys) => h.findIndex(label => keys.some(k => label.includes(k)));
+    /**
+     * แยกฟิลด์จากแถว
+     * โครงสร้างปกติ: A สถานะ | B รูป | C ชื่อ | D หมวด | E+ ราคา
+     * แถวที่ไม่มีรูปมักใส่ชื่อใน B แล้วเลื่อนหมวด/ราคาไปทางซ้าย → แก้ให้อัตโนมัติ
+     */
+    function extractRowFields(row) {
+      const status = (row[COL.status] || '').trim();
+      let imageRaw = (row[COL.image] || '').trim();
+      let name = (row[COL.name] || '').trim();
+      let category = (row[COL.category] || '').trim();
+      let priceShift = 0;
 
-      const statusIdx = find('สถานะ', 'การแสดงผล');
-      const imageIdx  = find('รูปสินค้า', 'รูปภาพ', 'ลิงก์รูป');
-      const nameIdx   = find('รายละเอียดสินค้า', 'ชื่อสินค้า');
-      const catIdx    = find('ประเภทกลุ่ม', 'หมวดหมู่');
-
-      // โครงสร้างใหม่ตามที่กำหนด
-      if (nameIdx === 2 || (statusIdx === 0 && imageIdx === 1)) {
-        return {
-          status: statusIdx >= 0 ? statusIdx : 0,
-          image:  imageIdx  >= 0 ? imageIdx  : 1,
-          name:   nameIdx   >= 0 ? nameIdx   : 2,
-          category: catIdx  >= 0 ? catIdx    : 3,
-          priceStart: Math.max(
-            nameIdx >= 0 ? nameIdx : 2,
-            catIdx  >= 0 ? catIdx  : 3
-          ) + 1,
-        };
+      if (imageRaw && !looksLikeUrl(imageRaw) && looksLikeNumber(row[COL.category])) {
+        name = imageRaw;
+        category = (row[COL.name] || '').trim();
+        imageRaw = '';
+        priceShift = -1;
       }
 
-      // โครงสร้างเก่า (ไม่มีคอลัมน์สถานะ): A รูป, B ชื่อ, C หมวด, D+ ราคา
-      if (nameIdx === 1 || (imageIdx === 0 && catIdx === 2)) {
-        return {
-          status: -1,
-          image:  imageIdx >= 0 ? imageIdx : 0,
-          name:   nameIdx  >= 0 ? nameIdx  : 1,
-          category: catIdx >= 0 ? catIdx   : 2,
-          priceStart: Math.max(
-            nameIdx >= 0 ? nameIdx : 1,
-            catIdx  >= 0 ? catIdx  : 2
-          ) + 1,
-        };
-      }
-
-      // ค่าเริ่มต้น = โครงสร้างใหม่
-      return { status: 0, image: 1, name: 2, category: 3, priceStart: 4 };
+      return { status, imageRaw, name, category, priceShift };
     }
 
     // ─── Parse CSV ──────────────────────────────────────────────
@@ -333,25 +325,24 @@
       if (!rows.length) return [];
 
       const headers = rows[0].map(c => String(c || '').replace(/^\uFEFF/, '').trim());
-      const map = detectColumnMap(headers);
-
-      const tierDefs = headers.slice(map.priceStart).map((h, i) => {
+      const tierDefs = headers.slice(COL.priceStart).map((h, i) => {
         const parsed = parseTierHeader(h);
-        return parsed ? { ...parsed, colIndex: map.priceStart + i } : null;
+        return parsed ? { ...parsed, colIndex: COL.priceStart + i } : null;
       }).filter(Boolean);
 
       const result = [];
       rows.slice(1).forEach((row, idx) => {
-        const status = map.status >= 0 ? (row[map.status] || '') : 'แสดงผล';
-        if (!isProductVisible(status)) return;
+        const fields = extractRowFields(row);
+        if (!isProductVisible(fields.status)) return;
+        if (!fields.name) return;
 
-        const name = (row[map.name] || '').trim();
-        const cat  = normalizeCategory((row[map.category] || '').trim());
-        if (!name) return;
+        const cat = normalizeCategory(fields.category);
+        if (!cat || looksLikeNumber(cat)) return;
 
         const tiers = tierDefs
           .map(td => {
-            const raw = String(row[td.colIndex] || '').replace(/,/g, '').trim();
+            const cellIdx = td.colIndex + fields.priceShift;
+            const raw = String(row[cellIdx] || '').replace(/,/g, '').trim();
             const price = parseFloat(raw);
             if (!raw || isNaN(price)) return null;
             return { label: td.label, min: td.min, max: td.max, price };
@@ -361,9 +352,9 @@
 
         result.push({
           id: `p-${idx}`,
-          name,
+          name: fields.name,
           category: cat,
-          image: toDriveImageUrl(row[map.image]),
+          image: toDriveImageUrl(fields.imageRaw),
           tiers,
         });
       });
@@ -372,23 +363,27 @@
 
     // ─── Fetch data ─────────────────────────────────────────────
     async function fetchCSV() {
-      const res = await fetch(CSV_URL);
+      const res = await fetch(CSV_URL, { cache: 'no-store' });
       if (!res.ok) throw new Error(`CSV HTTP ${res.status}`);
       const text = await res.text();
       if (/^\s*<(!DOCTYPE|html)/i.test(text)) throw new Error('CSV returned HTML');
       return text;
     }
 
-    async function fetchGviz() {
-      const res = await fetch(GVIZ_URL);
-      if (!res.ok) throw new Error(`GViz HTTP ${res.status}`);
-      const text = await res.text();
+    function parseGvizPayload(text) {
       const start = text.indexOf('{');
       const end = text.lastIndexOf('}');
       if (start < 0 || end < 0) throw new Error('Invalid GViz response');
       const json = JSON.parse(text.slice(start, end + 1));
-      const colCount = (json.table.cols || []).length;
-      const headers = (json.table.cols || []).map(c => (c.label || c.id || '').trim());
+      const cols = json.table.cols || [];
+      const colCount = cols.length;
+      const headers = cols.map((c, i) => {
+        const label = (c.label || '').trim();
+        if (label) return label;
+        // fallback ชื่อคอลัมน์มาตรฐานถ้า label ว่าง
+        const defaults = ['การแสดงผล', 'รูปสินค้า', 'รายละเอียดสินค้า', 'ประเภทกลุ่มสินค้า'];
+        return defaults[i] || `ราคาคอลัมน์${i + 1}`;
+      });
       const dataRows = (json.table.rows || []).map(r => {
         const cells = r.c || [];
         const row = [];
@@ -401,21 +396,103 @@
       return [headers, ...dataRows];
     }
 
+    async function fetchGviz() {
+      const res = await fetch(GVIZ_URL, { cache: 'no-store' });
+      if (!res.ok) throw new Error(`GViz HTTP ${res.status}`);
+      return parseGvizPayload(await res.text());
+    }
+
+    /** JSONP สำรองเมื่อเปิดไฟล์ local (file://) แล้ว fetch โดน CORS */
+    function fetchGvizJsonp() {
+      return new Promise((resolve, reject) => {
+        const cbName = `_sheetCb_${Date.now()}`;
+        const script = document.createElement('script');
+        const timer = setTimeout(() => {
+          cleanup();
+          reject(new Error('GViz JSONP timeout'));
+        }, 15000);
+
+        function cleanup() {
+          clearTimeout(timer);
+          delete window[cbName];
+          script.remove();
+        }
+
+        window[cbName] = (data) => {
+          try {
+            const text = typeof data === 'string' ? data : JSON.stringify(data);
+            // responseHandler ได้ object ตรงๆ
+            const json = typeof data === 'object' ? data : JSON.parse(text);
+            const cols = json.table.cols || [];
+            const headers = cols.map((c, i) => {
+              const label = (c.label || '').trim();
+              const defaults = ['การแสดงผล', 'รูปสินค้า', 'รายละเอียดสินค้า', 'ประเภทกลุ่มสินค้า'];
+              return label || defaults[i] || `ราคาคอลัมน์${i + 1}`;
+            });
+            const dataRows = (json.table.rows || []).map(r => {
+              const cells = r.c || [];
+              return cols.map((_, i) => {
+                const c = cells[i];
+                return c && c.v != null ? String(c.v) : '';
+              });
+            });
+            cleanup();
+            resolve([headers, ...dataRows]);
+          } catch (e) {
+            cleanup();
+            reject(e);
+          }
+        };
+
+        script.onerror = () => {
+          cleanup();
+          reject(new Error('GViz JSONP failed'));
+        };
+        script.src = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:json;responseHandler:${cbName}`;
+        document.head.appendChild(script);
+      });
+    }
+
     async function loadProducts() {
       loadingScreen.classList.remove('hidden');
       errorScreen.classList.add('hidden');
       mainContent.classList.add('hidden');
 
       try {
-        let rows;
+        let rows = null;
+        const errors = [];
+
         try {
-          const csv = await fetchCSV();
-          rows = parseCSV(csv);
-        } catch {
-          rows = await fetchGviz();
+          rows = parseCSV(await fetchCSV());
+        } catch (e) {
+          errors.push(e.message);
+        }
+
+        if (!rows || rows.length < 2) {
+          try {
+            rows = await fetchGviz();
+          } catch (e) {
+            errors.push(e.message);
+          }
+        }
+
+        if (!rows || rows.length < 2) {
+          try {
+            rows = await fetchGvizJsonp();
+          } catch (e) {
+            errors.push(e.message);
+          }
+        }
+
+        if (!rows || rows.length < 2) {
+          throw new Error(errors.join(' | ') || 'โหลดข้อมูลไม่สำเร็จ');
         }
 
         products = buildProductsFromRows(rows);
+        if (!products.length) {
+          throw new Error('ไม่พบสินค้าที่สถานะ "แสดงผล" ใน Google Sheets');
+        }
+
         buildCategories();
         initUI();
         loadingScreen.classList.add('hidden');
@@ -429,27 +506,34 @@
 
     // ─── Categories ─────────────────────────────────────────────
     function buildCategories() {
-      const fromSheet = [...new Set(products.map(p => p.category).filter(Boolean))];
+      const fromSheet = [];
       const seen = new Set();
-      categories = [];
+      products.forEach(p => {
+        if (p.category && !seen.has(p.category)) {
+          seen.add(p.category);
+          fromSheet.push(p.category);
+        }
+      });
 
+      categories = [];
+      const used = new Set();
       CATEGORY_ORDER.forEach(cat => {
         const norm = normalizeCategory(cat);
-        if (!seen.has(norm)) {
-          seen.add(norm);
+        if (used.has(norm)) return;
+        if (products.some(p => p.category === norm)) {
+          used.add(norm);
           categories.push(norm);
         }
       });
       fromSheet.forEach(cat => {
-        if (!seen.has(cat)) {
-          seen.add(cat);
+        if (!used.has(cat)) {
+          used.add(cat);
           categories.push(cat);
         }
       });
 
-      const firstWithProducts = categories.find(c => products.some(p => p.category === c));
       if (!selectedCat || !products.some(p => p.category === selectedCat)) {
-        selectedCat = firstWithProducts || categories[0] || null;
+        selectedCat = categories[0] || null;
       }
     }
 
@@ -538,9 +622,9 @@
         card.className = 'product-panel bg-wood-50 rounded-2xl border border-wood-200 p-4 sm:p-5';
         card.innerHTML = `
           <div class="flex flex-col sm:flex-row sm:items-start gap-4">
-            <div class="w-full sm:w-16 h-16 rounded-xl bg-wood-200 flex items-center justify-center text-2xl shrink-0 overflow-hidden">
+            <div class="w-full sm:w-24 h-24 rounded-xl bg-wood-200 flex items-center justify-center text-3xl shrink-0 overflow-hidden">
               ${product.image
-                ? `<img src="${product.image.replace(/"/g, '&quot;')}" alt="${product.name.replace(/"/g, '&quot;')}" class="w-full h-full object-cover" loading="lazy" onerror="this.replaceWith(document.createTextNode('🪵'))">`
+                ? `<img src="${product.image.replace(/"/g, '&quot;')}" alt="${product.name.replace(/"/g, '&quot;')}" class="w-full h-full object-cover" loading="lazy" referrerpolicy="no-referrer" onerror="this.replaceWith(document.createTextNode('🪵'))">`
                 : '🪵'}
             </div>
             <div class="flex-1 min-w-0">
