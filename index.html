@@ -264,8 +264,9 @@
       'ไม้อัดHRM': 'ไม้อัดHMR',
     };
 
-    // คอลัมน์คงที่ตามชีตใหม่
-    const COL = { status: 0, image: 1, name: 2, category: 3, priceStart: 4 };
+    // คอลัมน์เริ่มต้นตามชีต: A สถานะ | B รูป | C ชื่อ | D ลักษณะนาม | E หมวด | F+ ราคา
+    const COL_DEFAULT = { status: 0, image: 1, name: 2, unit: 3, category: 4, priceStart: 5 };
+    const KNOWN_UNITS = ['แผ่น', 'ตัว', 'บาน', 'ม้วน'];
 
     // ─── State ──────────────────────────────────────────────────
     let products      = [];
@@ -294,7 +295,7 @@
       if (rangeMatch) {
         return { label: h.replace(/^ราคา\s*/, ''), min: +rangeMatch[1], max: +rangeMatch[2] };
       }
-      const upMatch = h.match(/(\d+)\s*(?:แผ่น|ตัว|บาน)?\s*(?:ขึ้นไป|ชึ้นไป|ขึ่นไป)/);
+      const upMatch = h.match(/(\d+)\s*(?:แผ่น|ตัว|บาน|ม้วน)?\s*(?:ขึ้นไป|ชึ้นไป|ขึ่นไป)/);
       if (upMatch) {
         return { label: h.replace(/^ราคา\s*/, ''), min: +upMatch[1], max: Infinity };
       }
@@ -311,6 +312,40 @@
 
     function looksLikeNumber(s) {
       return /^\d+([.,]\d+)?$/.test(String(s || '').trim());
+    }
+
+    function detectColumns(headers) {
+      const h = headers.map(c => String(c || '').replace(/^\uFEFF/, '').trim());
+      const idx = (re, fallback) => {
+        const i = h.findIndex(name => re.test(name));
+        return i >= 0 ? i : fallback;
+      };
+      const priceStart = h.findIndex((name, i) => i >= 3 && parseTierHeader(name));
+      return {
+        status: idx(/แสดงผล/, COL_DEFAULT.status),
+        image: idx(/รูป/, COL_DEFAULT.image),
+        name: idx(/รายละเอียด|ชื่อสินค้า/, COL_DEFAULT.name),
+        unit: idx(/ลักษณะนาม|หน่วยนับ/, COL_DEFAULT.unit),
+        category: idx(/ประเภทกลุ่ม|หมวดหมู่/, COL_DEFAULT.category),
+        priceStart: priceStart >= 0 ? priceStart : COL_DEFAULT.priceStart,
+      };
+    }
+
+    function normalizeUnit(unit, category = '', name = '') {
+      let u = String(unit || '').trim().replace(/^[\/\s]+/, '').replace(/[\/\s]+$/, '');
+      if (KNOWN_UNITS.includes(u)) return u;
+      for (const k of KNOWN_UNITS) {
+        if (u.includes(k)) return k;
+      }
+      const hay = `${category} ${name}`;
+      if (/ประตู/.test(hay)) return 'บาน';
+      if (/ม้วน|ผ้าใบ/.test(hay)) return 'ม้วน';
+      if (/จ๊อย/.test(hay)) return 'ตัว';
+      return 'แผ่น';
+    }
+
+    function productUnit(product) {
+      return (product && product.unit) || 'แผ่น';
     }
 
     /** แปลงลิงก์ Google Drive → ลิงก์แสดงรูป (ว่างได้) */
@@ -343,24 +378,26 @@
 
     /**
      * แยกฟิลด์จากแถว
-     * โครงสร้างปกติ: A สถานะ | B รูป | C ชื่อ | D หมวด | E+ ราคา
-     * แถวที่ไม่มีรูปมักใส่ชื่อใน B แล้วเลื่อนหมวด/ราคาไปทางซ้าย → แก้ให้อัตโนมัติ
+     * โครงสร้างปกติ: A สถานะ | B รูป | C ชื่อ | D ลักษณะนาม | E หมวด | F+ ราคา
+     * แถวที่ไม่มีรูปมักใส่ชื่อใน B แล้วเลื่อนคอลัมน์ไปทางซ้าย → แก้ให้อัตโนมัติ
      */
-    function extractRowFields(row) {
-      const status = (row[COL.status] || '').trim();
-      let imageRaw = (row[COL.image] || '').trim();
-      let name = (row[COL.name] || '').trim();
-      let category = (row[COL.category] || '').trim();
+    function extractRowFields(row, col) {
+      const status = (row[col.status] || '').trim();
+      let imageRaw = (row[col.image] || '').trim();
+      let name = (row[col.name] || '').trim();
+      let unit = (row[col.unit] || '').trim();
+      let category = (row[col.category] || '').trim();
       let priceShift = 0;
 
-      if (imageRaw && !looksLikeUrl(imageRaw) && looksLikeNumber(row[COL.category])) {
+      if (imageRaw && !looksLikeUrl(imageRaw) && looksLikeNumber(row[col.category])) {
         name = imageRaw;
-        category = (row[COL.name] || '').trim();
+        unit = (row[col.name] || '').trim();
+        category = (row[col.unit] || '').trim();
         imageRaw = '';
         priceShift = -1;
       }
 
-      return { status, imageRaw, name, category, priceShift };
+      return { status, imageRaw, name, unit, category, priceShift };
     }
 
     // ─── Parse CSV ──────────────────────────────────────────────
@@ -400,14 +437,15 @@
       if (!rows.length) return [];
 
       const headers = rows[0].map(c => String(c || '').replace(/^\uFEFF/, '').trim());
-      const tierDefs = headers.slice(COL.priceStart).map((h, i) => {
+      const col = detectColumns(headers);
+      const tierDefs = headers.slice(col.priceStart).map((h, i) => {
         const parsed = parseTierHeader(h);
-        return parsed ? { ...parsed, colIndex: COL.priceStart + i } : null;
+        return parsed ? { ...parsed, colIndex: col.priceStart + i } : null;
       }).filter(Boolean);
 
       const result = [];
       rows.slice(1).forEach((row, idx) => {
-        const fields = extractRowFields(row);
+        const fields = extractRowFields(row, col);
         if (!isProductVisible(fields.status)) return;
         if (!fields.name) return;
 
@@ -429,6 +467,7 @@
           id: `p-${idx}`,
           name: fields.name,
           category: cat,
+          unit: normalizeUnit(fields.unit, cat, fields.name),
           image: toDriveImageUrl(fields.imageRaw),
           tiers,
         });
@@ -456,7 +495,7 @@
         const label = (c.label || '').trim();
         if (label) return label;
         // fallback ชื่อคอลัมน์มาตรฐานถ้า label ว่าง
-        const defaults = ['การแสดงผล', 'รูปสินค้า', 'รายละเอียดสินค้า', 'ประเภทกลุ่มสินค้า'];
+        const defaults = ['การแสดงผล', 'รูปสินค้า', 'รายละเอียดสินค้า', 'ลักษณะนาม', 'ประเภทกลุ่มสินค้า'];
         return defaults[i] || `ราคาคอลัมน์${i + 1}`;
       });
       const dataRows = (json.table.rows || []).map(r => {
@@ -501,7 +540,7 @@
             const cols = json.table.cols || [];
             const headers = cols.map((c, i) => {
               const label = (c.label || '').trim();
-              const defaults = ['การแสดงผล', 'รูปสินค้า', 'รายละเอียดสินค้า', 'ประเภทกลุ่มสินค้า'];
+              const defaults = ['การแสดงผล', 'รูปสินค้า', 'รายละเอียดสินค้า', 'ลักษณะนาม', 'ประเภทกลุ่มสินค้า'];
               return label || defaults[i] || `ราคาคอลัมน์${i + 1}`;
             });
             const dataRows = (json.table.rows || []).map(r => {
@@ -707,6 +746,7 @@
         const qty = productQty[product.id];
         const unitPrice = getUnitPrice(product, qty);
         const tierLabel = getActiveTierLabel(product, qty);
+        const unitName = productUnit(product);
 
         const card = document.createElement('div');
         card.className = 'product-panel bg-wood-50 rounded-2xl border border-wood-200 p-4 sm:p-5';
@@ -727,7 +767,7 @@
                   <thead>
                     <tr class="text-wood-500">
                       <th class="text-left py-2 pr-3 font-medium">ช่วงจำนวน</th>
-                      <th class="text-right py-2 font-medium">ราคา/แผ่น</th>
+                      <th class="text-right py-2 font-medium">ราคา/${unitName}</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -750,8 +790,8 @@
                   <button data-action="inc" data-id="${product.id}" class="qty-btn w-10 h-10 flex items-center justify-center text-wood-600 hover:bg-wood-100 transition text-xl font-bold">+</button>
                 </div>
                 <div class="flex-1 min-w-[140px]">
-                  <p class="text-sm text-wood-500">เรท ${tierLabel} · ${qty} แผ่น</p>
-                  <p class="text-xl font-bold text-wood-700">${formatPrice(unitPrice)} <span class="text-base font-normal text-wood-500">/ แผ่น</span></p>
+                  <p class="text-sm text-wood-500">เรท ${tierLabel} · ${qty} ${unitName}</p>
+                  <p class="text-xl font-bold text-wood-700">${formatPrice(unitPrice)} <span class="text-base font-normal text-wood-500">/ ${unitName}</span></p>
                   <p class="text-base text-wood-600">รวม <span class="font-semibold">${formatPrice(unitPrice * qty)}</span></p>
                 </div>
                 <button data-action="add" data-id="${product.id}" class="px-5 py-2.5 bg-wood-600 hover:bg-wood-700 text-white font-semibold text-base rounded-xl transition shadow-sm">
@@ -894,10 +934,11 @@
         const unit = getUnitPrice(product, qty);
         const sub  = unit * qty;
         total += sub;
+        const unitName = productUnit(product);
         return `
           <div class="bg-wood-50 rounded-xl p-3 border border-wood-200">
             <p class="font-semibold text-wood-800 text-base leading-snug">${product.name}</p>
-            <p class="text-sm text-wood-500 mt-0.5">เรท ${getActiveTierLabel(product, qty)} · ${formatPrice(unit)}/แผ่น</p>
+            <p class="text-sm text-wood-500 mt-0.5">เรท ${getActiveTierLabel(product, qty)} · ${formatPrice(unit)}/${unitName}</p>
             <div class="flex items-center justify-between mt-2">
               <div class="flex items-center bg-white rounded-lg border border-wood-200 overflow-hidden">
                 <button onclick="updateCartQty('${product.id}', -1)" class="w-8 h-8 flex items-center justify-center hover:bg-wood-100 text-wood-600 font-bold">−</button>
@@ -1026,8 +1067,9 @@
         const unit = getUnitPrice(product, qty);
         const sub  = unit * qty;
         total += sub;
+        const unitName = productUnit(product);
         lines.push(`รายการไม้อัด: ${product.name}`);
-        lines.push(`จำนวน ${qty} x ${formatPrice(unit)}`);
+        lines.push(`จำนวน ${qty} ${unitName} x ${formatPrice(unit)}`);
         lines.push(`รวม ${formatPrice(sub)}`);
         if (i < items.length - 1) lines.push('');
       });
