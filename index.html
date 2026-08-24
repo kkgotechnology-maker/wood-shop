@@ -64,6 +64,12 @@
       animation: cartShake 1s ease-in-out;
       transform-origin: center center;
     }
+    .shipping-overlay.open { opacity: 1; pointer-events: auto; }
+    .shipping-modal.open { pointer-events: auto; }
+    .shipping-modal.open .shipping-dialog {
+      opacity: 1;
+      transform: scale(1) translateY(0);
+    }
   </style>
 </head>
 <body class="bg-wood-50 font-sans text-wood-900 min-h-screen">
@@ -171,6 +177,49 @@
       <button id="clearCartBtn" class="w-full py-2 text-wood-500 hover:text-red-500 text-sm font-medium transition">ล้างตะกร้า</button>
     </div>
   </aside>
+
+  <!-- Shipping Confirm Modal -->
+  <div id="shippingOverlay" class="shipping-overlay fixed inset-0 bg-black/50 z-[60] opacity-0 pointer-events-none transition-opacity duration-200"></div>
+  <div id="shippingModal" class="shipping-modal fixed inset-0 z-[70] flex items-end sm:items-center justify-center p-0 sm:p-4 pointer-events-none">
+    <div class="shipping-dialog w-full sm:max-w-md bg-white rounded-t-2xl sm:rounded-2xl shadow-2xl overflow-hidden opacity-0 transform scale-95 translate-y-4 transition duration-200">
+      <div class="px-5 py-4 bg-wood-800 text-white flex items-start justify-between gap-3">
+        <div>
+          <h2 class="font-bold text-lg">ยืนยันข้อมูลจัดส่ง</h2>
+          <p class="text-wood-300 text-xs mt-0.5">กรอกข้อมูลก่อนส่งใบสั่งซื้อเข้า LINE</p>
+        </div>
+        <button type="button" id="shippingCloseBtn" class="p-1.5 rounded-lg hover:bg-white/10 transition shrink-0" aria-label="ปิด">
+          <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        </button>
+      </div>
+      <form id="shippingForm" class="p-5 space-y-4">
+        <div>
+          <label for="shipName" class="block text-sm font-semibold text-wood-800 mb-1.5">ชื่อ / ร้านค้า</label>
+          <input id="shipName" name="name" type="text" autocomplete="name" required
+            placeholder="เช่น ร้านสมชาย หรือ คุณสมชาย"
+            class="w-full px-4 py-3 rounded-xl border border-wood-200 bg-wood-50 text-wood-900 placeholder:text-wood-400 focus:outline-none focus:ring-2 focus:ring-wood-500 focus:border-wood-500" />
+        </div>
+        <div>
+          <label for="shipAddress" class="block text-sm font-semibold text-wood-800 mb-1.5">อำเภอ, จังหวัด</label>
+          <input id="shipAddress" name="address" type="text" autocomplete="address-level2" required
+            placeholder="เช่น เมืองขอนแก่น, ขอนแก่น"
+            class="w-full px-4 py-3 rounded-xl border border-wood-200 bg-wood-50 text-wood-900 placeholder:text-wood-400 focus:outline-none focus:ring-2 focus:ring-wood-500 focus:border-wood-500" />
+        </div>
+        <div>
+          <label for="shipPhone" class="block text-sm font-semibold text-wood-800 mb-1.5">เบอร์โทรติดต่อ / เบอร์ติดตั้ง</label>
+          <input id="shipPhone" name="phone" type="tel" inputmode="tel" autocomplete="tel" required
+            placeholder="เช่น 0812345678"
+            class="w-full px-4 py-3 rounded-xl border border-wood-200 bg-wood-50 text-wood-900 placeholder:text-wood-400 focus:outline-none focus:ring-2 focus:ring-wood-500 focus:border-wood-500" />
+        </div>
+        <p id="shippingError" class="hidden text-sm text-red-600"></p>
+        <div class="flex gap-2 pt-1">
+          <button type="button" id="shippingCancelBtn" class="flex-1 py-3 rounded-xl border border-wood-200 text-wood-700 font-medium hover:bg-wood-50 transition">ยกเลิก</button>
+          <button type="submit" class="flex-[1.4] py-3 rounded-xl bg-green-500 hover:bg-green-600 text-white font-bold transition shadow-lg shadow-green-500/25">ยืนยันส่ง LINE</button>
+        </div>
+      </form>
+    </div>
+  </div>
 
   <script>
     // ─── Config ───────────────────────────────────────────────
@@ -848,13 +897,80 @@
       document.body.style.overflow = '';
     }
 
+    // ─── Shipping info (localStorage) ───────────────────────────
+    const SHIPPING_STORAGE_KEY = 'uot-shipping-info';
+    const shippingOverlay = $('#shippingOverlay');
+    const shippingModal   = $('#shippingModal');
+    const shippingForm    = $('#shippingForm');
+    const shippingError   = $('#shippingError');
+
+    function loadShippingInfo() {
+      try {
+        const raw = localStorage.getItem(SHIPPING_STORAGE_KEY);
+        if (!raw) return { name: '', address: '', phone: '' };
+        const data = JSON.parse(raw);
+        return {
+          name: String(data.name || '').trim(),
+          address: String(data.address || '').trim(),
+          phone: String(data.phone || '').trim(),
+        };
+      } catch (e) {
+        return { name: '', address: '', phone: '' };
+      }
+    }
+
+    function saveShippingInfo(info) {
+      localStorage.setItem(SHIPPING_STORAGE_KEY, JSON.stringify(info));
+    }
+
+    function fillShippingForm() {
+      const info = loadShippingInfo();
+      $('#shipName').value = info.name;
+      $('#shipAddress').value = info.address;
+      $('#shipPhone').value = info.phone;
+      shippingError.classList.add('hidden');
+      shippingError.textContent = '';
+    }
+
+    function openShippingModal() {
+      if (!Object.keys(cart).length) return;
+      fillShippingForm();
+      shippingOverlay.classList.add('open');
+      shippingModal.classList.add('open');
+      setTimeout(() => $('#shipName').focus(), 180);
+    }
+
+    function closeShippingModal() {
+      shippingOverlay.classList.remove('open');
+      shippingModal.classList.remove('open');
+    }
+
+    function readShippingForm() {
+      return {
+        name: ($('#shipName').value || '').trim(),
+        address: ($('#shipAddress').value || '').trim(),
+        phone: ($('#shipPhone').value || '').trim(),
+      };
+    }
+
     // ─── LINE Checkout ──────────────────────────────────────────
     function checkout() {
+      openShippingModal();
+    }
+
+    function sendOrderToLine(info) {
       const items = Object.values(cart);
       if (!items.length) return;
 
       let total = 0;
-      const lines = ['🪵 ใบสั่งซื้อ บริษัท.ยู.โอ.ที.เทรดดิ้ง จำกัด', '─────────────────'];
+      const lines = [
+        '🪵 ใบสั่งซื้อ บริษัท.ยู.โอ.ที.เทรดดิ้ง จำกัด',
+        '─────────────────',
+        `ชื่อ / ร้านค้า: ${info.name}`,
+        `อำเภอ, จังหวัด: ${info.address}`,
+        `เบอร์โทรติดต่อ / เบอร์ติดตั้ง: ${info.phone}`,
+        '─────────────────',
+      ];
 
       items.forEach(({ product, qty }, i) => {
         const unit = getUnitPrice(product, qty);
@@ -889,6 +1005,21 @@
     $('#clearCartBtn').addEventListener('click', () => {
       cart = {};
       updateCartUI();
+    });
+    $('#shippingCloseBtn').addEventListener('click', closeShippingModal);
+    $('#shippingCancelBtn').addEventListener('click', closeShippingModal);
+    $('#shippingOverlay').addEventListener('click', closeShippingModal);
+    shippingForm.addEventListener('submit', (e) => {
+      e.preventDefault();
+      const info = readShippingForm();
+      if (!info.name || !info.address || !info.phone) {
+        shippingError.textContent = 'กรุณากรอกข้อมูลให้ครบทั้ง 3 ช่อง';
+        shippingError.classList.remove('hidden');
+        return;
+      }
+      saveShippingInfo(info);
+      closeShippingModal();
+      sendOrderToLine(info);
     });
 
     loadProducts();
