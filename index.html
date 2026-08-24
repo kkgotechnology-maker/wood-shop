@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>ร้านไม้อัด | Wood Shop</title>
+  <title>บริษัท.ยู.โอ.ที.เทรดดิ้ง จำกัด | จำหน่ายไม้อัดทุกประเภท</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script>
     tailwind.config = {
@@ -11,16 +11,16 @@
         extend: {
           colors: {
             wood: {
-              50: '#faf6f1',
-              100: '#f0e6d8',
-              200: '#e0cdb3',
-              300: '#c9a87a',
-              400: '#b8894f',
-              500: '#a06d35',
-              600: '#85562a',
-              700: '#6b4324',
-              800: '#523520',
-              900: '#3d2818',
+              50: '#f3f8f4',
+              100: '#dcefe0',
+              200: '#b8d9be',
+              300: '#7fb88a',
+              400: '#4d9a5c',
+              500: '#357a43',
+              600: '#2a6136',
+              700: '#234c2c',
+              800: '#1b3a23',
+              900: '#14281a',
             },
           },
           fontFamily: {
@@ -35,9 +35,9 @@
   <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;500;600;700&display=swap" rel="stylesheet" />
   <style>
     .category-item.active {
-      background: linear-gradient(135deg, #85562a 0%, #a06d35 100%);
+      background: linear-gradient(135deg, #2a6136 0%, #357a43 100%);
       color: white;
-      box-shadow: 0 4px 14px rgba(133, 86, 42, 0.35);
+      box-shadow: 0 4px 14px rgba(42, 97, 54, 0.35);
     }
     .product-panel {
       animation: slideIn 0.25s ease-out;
@@ -49,7 +49,7 @@
     .cart-drawer.open { transform: translateX(0); }
     .cart-overlay.open { opacity: 1; pointer-events: auto; }
     .scrollbar-thin::-webkit-scrollbar { width: 4px; height: 4px; }
-    .scrollbar-thin::-webkit-scrollbar-thumb { background: #c9a87a; border-radius: 4px; }
+    .scrollbar-thin::-webkit-scrollbar-thumb { background: #7fb88a; border-radius: 4px; }
   </style>
 </head>
 <body class="bg-wood-50 font-sans text-wood-900 min-h-screen">
@@ -60,8 +60,8 @@
       <div class="flex items-center gap-3">
         <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-wood-600 to-wood-400 flex items-center justify-center text-white text-lg font-bold shadow">🪵</div>
         <div>
-          <h1 class="text-lg font-bold text-wood-800 leading-tight">ร้านไม้อัด</h1>
-          <p class="text-xs text-wood-500">Wood Plywood Shop</p>
+          <h1 class="text-[15px] sm:text-lg font-bold text-wood-800 leading-tight">บริษัท.ยู.โอ.ที.เทรดดิ้ง จำกัด</h1>
+          <p class="text-xs text-wood-500">จำหน่ายไม้อัดทุกประเภท</p>
         </div>
       </div>
       <button id="cartToggleBtn" class="relative p-2.5 rounded-xl bg-wood-100 hover:bg-wood-200 transition-colors">
@@ -787,7 +787,7 @@
       if (!items.length) return;
 
       let total = 0;
-      const lines = ['🪵 ใบสั่งซื้อ ร้านไม้อัด', '─────────────────'];
+      const lines = ['🪵 ใบสั่งซื้อ บริษัท.ยู.โอ.ที.เทรดดิ้ง จำกัด', '─────────────────'];
 
       items.forEach(({ product, qty }, i) => {
         const unit = getUnitPrice(product, qty);
