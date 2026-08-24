@@ -1109,10 +1109,9 @@
         const sub  = unit * qty;
         total += sub;
         const unitName = productUnit(product);
-        lines.push(`รายการไม้อัด: ${product.name}`);
+        lines.push(`${i + 1}.${product.name}`);
         lines.push(`จำนวน ${qty} ${unitName} x ${formatPrice(unit)}`);
         lines.push(`รวม ${formatPrice(sub)}`);
-        if (i < items.length - 1) lines.push('');
       });
 
       lines.push('---');
