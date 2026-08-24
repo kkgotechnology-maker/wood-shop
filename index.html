@@ -193,24 +193,36 @@
           </svg>
         </button>
       </div>
-      <form id="shippingForm" class="p-5 space-y-4">
+      <form id="shippingForm" class="p-5 space-y-3 max-h-[70vh] overflow-y-auto scrollbar-thin">
         <div>
-          <label for="shipName" class="block text-sm font-semibold text-wood-800 mb-1.5">ชื่อ / ร้านค้า</label>
+          <label for="shipName" class="block text-sm font-semibold text-wood-800 mb-1.5">1. ชื่อลูกค้า</label>
           <input id="shipName" name="name" type="text" autocomplete="name" required
-            placeholder="เช่น ร้านสมชาย หรือ คุณสมชาย"
-            class="w-full px-4 py-3 rounded-xl border border-wood-200 bg-wood-50 text-wood-900 placeholder:text-wood-400 focus:outline-none focus:ring-2 focus:ring-wood-500 focus:border-wood-500" />
+            placeholder="เช่น คุณสมชาย หรือ ร้านสมชาย"
+            class="w-full px-4 py-2.5 rounded-xl border border-wood-200 bg-wood-50 text-wood-900 placeholder:text-wood-400 focus:outline-none focus:ring-2 focus:ring-wood-500 focus:border-wood-500" />
         </div>
         <div>
-          <label for="shipAddress" class="block text-sm font-semibold text-wood-800 mb-1.5">อำเภอ, จังหวัด</label>
-          <input id="shipAddress" name="address" type="text" autocomplete="address-level2" required
-            placeholder="เช่น เมืองขอนแก่น, ขอนแก่น"
-            class="w-full px-4 py-3 rounded-xl border border-wood-200 bg-wood-50 text-wood-900 placeholder:text-wood-400 focus:outline-none focus:ring-2 focus:ring-wood-500 focus:border-wood-500" />
+          <label for="shipAddress" class="block text-sm font-semibold text-wood-800 mb-1.5">2. ที่อยู่</label>
+          <textarea id="shipAddress" name="address" rows="2" autocomplete="street-address" required
+            placeholder="เช่น 123 หมู่ 5 ต.ในเมือง"
+            class="w-full px-4 py-2.5 rounded-xl border border-wood-200 bg-wood-50 text-wood-900 placeholder:text-wood-400 focus:outline-none focus:ring-2 focus:ring-wood-500 focus:border-wood-500 resize-none"></textarea>
         </div>
         <div>
-          <label for="shipPhone" class="block text-sm font-semibold text-wood-800 mb-1.5">เบอร์โทรติดต่อ / เบอร์ติดตั้ง</label>
+          <label for="shipDistrict" class="block text-sm font-semibold text-wood-800 mb-1.5">3. อำเภอ</label>
+          <input id="shipDistrict" name="district" type="text" autocomplete="address-level2" required
+            placeholder="เช่น เมืองขอนแก่น"
+            class="w-full px-4 py-2.5 rounded-xl border border-wood-200 bg-wood-50 text-wood-900 placeholder:text-wood-400 focus:outline-none focus:ring-2 focus:ring-wood-500 focus:border-wood-500" />
+        </div>
+        <div>
+          <label for="shipProvince" class="block text-sm font-semibold text-wood-800 mb-1.5">4. จังหวัด</label>
+          <input id="shipProvince" name="province" type="text" autocomplete="address-level1" required
+            placeholder="เช่น ขอนแก่น"
+            class="w-full px-4 py-2.5 rounded-xl border border-wood-200 bg-wood-50 text-wood-900 placeholder:text-wood-400 focus:outline-none focus:ring-2 focus:ring-wood-500 focus:border-wood-500" />
+        </div>
+        <div>
+          <label for="shipPhone" class="block text-sm font-semibold text-wood-800 mb-1.5">5. เบอร์ติดต่อ</label>
           <input id="shipPhone" name="phone" type="tel" inputmode="tel" autocomplete="tel" required
             placeholder="เช่น 0812345678"
-            class="w-full px-4 py-3 rounded-xl border border-wood-200 bg-wood-50 text-wood-900 placeholder:text-wood-400 focus:outline-none focus:ring-2 focus:ring-wood-500 focus:border-wood-500" />
+            class="w-full px-4 py-2.5 rounded-xl border border-wood-200 bg-wood-50 text-wood-900 placeholder:text-wood-400 focus:outline-none focus:ring-2 focus:ring-wood-500 focus:border-wood-500" />
         </div>
         <p id="shippingError" class="hidden text-sm text-red-600"></p>
         <div class="flex gap-2 pt-1">
@@ -904,18 +916,34 @@
     const shippingForm    = $('#shippingForm');
     const shippingError   = $('#shippingError');
 
+    function emptyShippingInfo() {
+      return { name: '', address: '', district: '', province: '', phone: '' };
+    }
+
     function loadShippingInfo() {
       try {
         const raw = localStorage.getItem(SHIPPING_STORAGE_KEY);
-        if (!raw) return { name: '', address: '', phone: '' };
+        if (!raw) return emptyShippingInfo();
         const data = JSON.parse(raw);
-        return {
-          name: String(data.name || '').trim(),
-          address: String(data.address || '').trim(),
-          phone: String(data.phone || '').trim(),
-        };
+        const name = String(data.name || '').trim();
+        const phone = String(data.phone || '').trim();
+        let address = String(data.address || '').trim();
+        let district = String(data.district || '').trim();
+        let province = String(data.province || '').trim();
+
+        // ข้อมูลเก่าที่เก็บ "อำเภอ, จังหวัด" ในช่อง address
+        if (!district && !province && address && data.district == null) {
+          if (address.includes(',')) {
+            const parts = address.split(',').map(s => s.trim()).filter(Boolean);
+            district = parts[0] || '';
+            province = parts.slice(1).join(', ');
+            address = '';
+          }
+        }
+
+        return { name, address, district, province, phone };
       } catch (e) {
-        return { name: '', address: '', phone: '' };
+        return emptyShippingInfo();
       }
     }
 
@@ -927,6 +955,8 @@
       const info = loadShippingInfo();
       $('#shipName').value = info.name;
       $('#shipAddress').value = info.address;
+      $('#shipDistrict').value = info.district;
+      $('#shipProvince').value = info.province;
       $('#shipPhone').value = info.phone;
       shippingError.classList.add('hidden');
       shippingError.textContent = '';
@@ -949,6 +979,8 @@
       return {
         name: ($('#shipName').value || '').trim(),
         address: ($('#shipAddress').value || '').trim(),
+        district: ($('#shipDistrict').value || '').trim(),
+        province: ($('#shipProvince').value || '').trim(),
         phone: ($('#shipPhone').value || '').trim(),
       };
     }
@@ -966,9 +998,11 @@
       const lines = [
         '🪵 ใบสั่งซื้อ บริษัท.ยู.โอ.ที.เทรดดิ้ง จำกัด',
         '─────────────────',
-        `ชื่อ / ร้านค้า: ${info.name}`,
-        `อำเภอ, จังหวัด: ${info.address}`,
-        `เบอร์โทรติดต่อ / เบอร์ติดตั้ง: ${info.phone}`,
+        `ชื่อลูกค้า: ${info.name}`,
+        `ที่อยู่: ${info.address}`,
+        `อำเภอ: ${info.district}`,
+        `จังหวัด: ${info.province}`,
+        `เบอร์ติดต่อ: ${info.phone}`,
         '─────────────────',
       ];
 
@@ -1012,8 +1046,8 @@
     shippingForm.addEventListener('submit', (e) => {
       e.preventDefault();
       const info = readShippingForm();
-      if (!info.name || !info.address || !info.phone) {
-        shippingError.textContent = 'กรุณากรอกข้อมูลให้ครบทั้ง 3 ช่อง';
+      if (!info.name || !info.address || !info.district || !info.province || !info.phone) {
+        shippingError.textContent = 'กรุณากรอกข้อมูลให้ครบทั้ง 5 ช่อง';
         shippingError.classList.remove('hidden');
         return;
       }
