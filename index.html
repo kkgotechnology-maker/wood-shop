@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>บริษัท.ยู.โอ.ที.เทรดดิ้ง จำกัด | จำหน่ายไม้อัดทุกประเภท</title>
+  <title>บจก.ยู.โอ.ที.เทรดดิ้ง | จำหน่ายไม้อัด</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script>
     tailwind.config = {
@@ -50,6 +50,20 @@
     .cart-overlay.open { opacity: 1; pointer-events: auto; }
     .scrollbar-thin::-webkit-scrollbar { width: 4px; height: 4px; }
     .scrollbar-thin::-webkit-scrollbar-thumb { background: #7fb88a; border-radius: 4px; }
+    @keyframes cartShake {
+      0%, 100% { transform: rotate(0deg) scale(1); }
+      12% { transform: rotate(-14deg) scale(1.08); }
+      24% { transform: rotate(12deg) scale(1.08); }
+      36% { transform: rotate(-10deg) scale(1.06); }
+      48% { transform: rotate(10deg) scale(1.06); }
+      60% { transform: rotate(-6deg) scale(1.04); }
+      72% { transform: rotate(6deg) scale(1.03); }
+      84% { transform: rotate(-3deg) scale(1.01); }
+    }
+    .cart-shake {
+      animation: cartShake 1s ease-in-out;
+      transform-origin: center center;
+    }
   </style>
 </head>
 <body class="bg-wood-50 font-sans text-wood-900 min-h-screen">
@@ -60,8 +74,8 @@
       <div class="flex items-center gap-3">
         <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-wood-600 to-wood-400 flex items-center justify-center text-white text-lg font-bold shadow">🪵</div>
         <div>
-          <h1 class="text-[15px] sm:text-lg font-bold text-wood-800 leading-tight">บริษัท.ยู.โอ.ที.เทรดดิ้ง จำกัด</h1>
-          <p class="text-xs text-wood-500">จำหน่ายไม้อัดทุกประเภท</p>
+          <h1 class="text-lg font-bold text-wood-800 leading-tight">บจก.ยู.โอ.ที.เทรดดิ้ง</h1>
+          <p class="text-xs text-wood-500">จำหน่ายไม้อัด</p>
         </div>
       </div>
       <button id="cartToggleBtn" class="relative p-2.5 rounded-xl bg-wood-100 hover:bg-wood-200 transition-colors">
@@ -700,6 +714,57 @@
     }
 
     // ─── Cart ───────────────────────────────────────────────────
+    let cartAudioCtx = null;
+
+    function getCartAudioCtx() {
+      const AC = window.AudioContext || window.webkitAudioContext;
+      if (!AC) return null;
+      if (!cartAudioCtx) cartAudioCtx = new AC();
+      if (cartAudioCtx.state === 'suspended') cartAudioCtx.resume();
+      return cartAudioCtx;
+    }
+
+    function playBellTone(ctx, freq, start, duration, volume) {
+      const osc = ctx.createOscillator();
+      const harmonic = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'sine';
+      harmonic.type = 'triangle';
+      osc.frequency.setValueAtTime(freq, start);
+      harmonic.frequency.setValueAtTime(freq * 2, start);
+      gain.gain.setValueAtTime(0.0001, start);
+      gain.gain.exponentialRampToValueAtTime(volume, start + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.0001, start + duration);
+      osc.connect(gain);
+      harmonic.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(start);
+      harmonic.start(start);
+      osc.stop(start + duration);
+      harmonic.stop(start + duration);
+    }
+
+    function playCartBell() {
+      try {
+        const ctx = getCartAudioCtx();
+        if (!ctx) return;
+        const now = ctx.currentTime;
+        playBellTone(ctx, 1318.5, now, 0.55, 0.16);
+        playBellTone(ctx, 1046.5, now + 0.14, 0.65, 0.14);
+      } catch (e) {
+        // บางเบราว์เซอร์อาจบล็อกเสียง — ไม่ให้กระทบการใส่ตะกร้า
+      }
+    }
+
+    function shakeCartButton() {
+      const btn = $('#cartToggleBtn');
+      if (!btn) return;
+      btn.classList.remove('cart-shake');
+      void btn.offsetWidth;
+      btn.classList.add('cart-shake');
+      btn.addEventListener('animationend', () => btn.classList.remove('cart-shake'), { once: true });
+    }
+
     function addToCart(productId) {
       const product = products.find(p => p.id === productId);
       if (!product) return;
@@ -711,6 +776,8 @@
         cart[productId] = { product, qty };
       }
       updateCartUI();
+      shakeCartButton();
+      playCartBell();
     }
 
     function updateCartQty(productId, delta) {
