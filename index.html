@@ -239,7 +239,7 @@
     const CSV_URL  = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/export?format=csv`;
     const GVIZ_URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:json`;
 
-    // ลำดับหมวดหมู่ตามคอลัมน์ D ในชีต (แสดงเฉพาะหมวดที่มีสินค้า)
+    // ลำดับแท็บหมวดหมู่ (ยึดกลุ่มจากคอลัมน์ E เป็นหลัก แสดงเฉพาะหมวดที่มีสินค้า)
     const CATEGORY_ORDER = [
       'ไม้อัดยาง',
       'ไม้อัดฟิล์มดำ',
@@ -267,6 +267,7 @@
     // คอลัมน์เริ่มต้นตามชีต: A สถานะ | B รูป | C ชื่อ | D ลักษณะนาม | E หมวด | F+ ราคา
     const COL_DEFAULT = { status: 0, image: 1, name: 2, unit: 3, category: 4, priceStart: 5 };
     const KNOWN_UNITS = ['แผ่น', 'ตัว', 'บาน', 'ม้วน'];
+    const UNIT_ALIASES = { 'ม่วน': 'ม้วน', 'มวน': 'ม้วน' };
 
     // ─── State ──────────────────────────────────────────────────
     let products      = [];
@@ -295,7 +296,7 @@
       if (rangeMatch) {
         return { label: h.replace(/^ราคา\s*/, ''), min: +rangeMatch[1], max: +rangeMatch[2] };
       }
-      const upMatch = h.match(/(\d+)\s*(?:แผ่น|ตัว|บาน|ม้วน)?\s*(?:ขึ้นไป|ชึ้นไป|ขึ่นไป)/);
+      const upMatch = h.match(/(\d+)\s*(?:แผ่น|ตัว|บาน|ม้วน|ม่วน)?\s*(?:ขึ้นไป|ชึ้นไป|ขึ่นไป)/);
       if (upMatch) {
         return { label: h.replace(/^ราคา\s*/, ''), min: +upMatch[1], max: Infinity };
       }
@@ -303,7 +304,19 @@
     }
 
     function normalizeCategory(cat) {
-      return CATEGORY_ALIASES[cat] || cat;
+      return CATEGORY_ALIASES[String(cat || '').replace(/\s+/g, ' ').trim()] || String(cat || '').replace(/\s+/g, ' ').trim();
+    }
+
+    function parseKnownUnit(raw) {
+      let u = String(raw || '').trim().replace(/^[\/\s]+/, '').replace(/[\/\s]+$/, '');
+      if (!u) return '';
+      if (UNIT_ALIASES[u]) return UNIT_ALIASES[u];
+      if (KNOWN_UNITS.includes(u)) return u;
+      for (const k of KNOWN_UNITS) {
+        if (u.includes(k)) return k;
+      }
+      if (u.includes('ม่วน') || u.includes('มวน')) return 'ม้วน';
+      return '';
     }
 
     function looksLikeUrl(s) {
@@ -320,26 +333,23 @@
         const i = h.findIndex(name => re.test(name));
         return i >= 0 ? i : fallback;
       };
-      const priceStart = h.findIndex((name, i) => i >= 3 && parseTierHeader(name));
+      const priceStart = h.findIndex((name, i) => i >= COL_DEFAULT.priceStart && parseTierHeader(name));
       return {
         status: idx(/แสดงผล/, COL_DEFAULT.status),
-        image: idx(/รูป/, COL_DEFAULT.image),
-        name: idx(/รายละเอียด|ชื่อสินค้า/, COL_DEFAULT.name),
+        image: idx(/รูปสินค้า|รูปภาพ/, COL_DEFAULT.image),
+        name: idx(/รายละเอียดสินค้า|ชื่อสินค้า/, COL_DEFAULT.name),
         unit: idx(/ลักษณะนาม|หน่วยนับ/, COL_DEFAULT.unit),
-        category: idx(/ประเภทกลุ่ม|หมวดหมู่/, COL_DEFAULT.category),
+        category: idx(/ประเภทกลุ่มสินค้า|ประเภทกลุ่ม|หมวดหมู่/, COL_DEFAULT.category),
         priceStart: priceStart >= 0 ? priceStart : COL_DEFAULT.priceStart,
       };
     }
 
     function normalizeUnit(unit, category = '', name = '') {
-      let u = String(unit || '').trim().replace(/^[\/\s]+/, '').replace(/[\/\s]+$/, '');
-      if (KNOWN_UNITS.includes(u)) return u;
-      for (const k of KNOWN_UNITS) {
-        if (u.includes(k)) return k;
-      }
+      const parsed = parseKnownUnit(unit);
+      if (parsed) return parsed;
       const hay = `${category} ${name}`;
       if (/ประตู/.test(hay)) return 'บาน';
-      if (/ม้วน|ผ้าใบ/.test(hay)) return 'ม้วน';
+      if (/ม้วน|ม่วน|ผ้าใบ/.test(hay)) return 'ม้วน';
       if (/จ๊อย/.test(hay)) return 'ตัว';
       return 'แผ่น';
     }
@@ -395,6 +405,15 @@
         category = (row[col.unit] || '').trim();
         imageRaw = '';
         priceShift = -1;
+      }
+
+      // ถ้า D/E สลับกัน (D เป็นหมวด, E เป็นลักษณนาม) ให้สลับกลับ
+      const unitFromD = parseKnownUnit(unit);
+      const unitFromE = parseKnownUnit(category);
+      if (!unitFromD && unitFromE && category && !looksLikeNumber(unit)) {
+        const swapped = unit;
+        unit = category;
+        category = swapped;
       }
 
       return { status, imageRaw, name, unit, category, priceShift };
@@ -465,6 +484,7 @@
 
         result.push({
           id: `p-${idx}`,
+          sheetOrder: idx,
           name: fields.name,
           category: cat,
           unit: normalizeUnit(fields.unit, cat, fields.name),
@@ -618,14 +638,14 @@
       }
     }
 
-    // ─── Categories ─────────────────────────────────────────────
+    // ─── Categories (กลุ่มตามคอลัมน์ E แล้วเรียงสินค้าตามลำดับในชีต) ─
     function buildCategories() {
-      const fromSheet = [];
+      const sheetOrder = [];
       const seen = new Set();
       products.forEach(p => {
         if (p.category && !seen.has(p.category)) {
           seen.add(p.category);
-          fromSheet.push(p.category);
+          sheetOrder.push(p.category);
         }
       });
 
@@ -634,12 +654,12 @@
       CATEGORY_ORDER.forEach(cat => {
         const norm = normalizeCategory(cat);
         if (used.has(norm)) return;
-        if (products.some(p => p.category === norm)) {
+        if (seen.has(norm)) {
           used.add(norm);
           categories.push(norm);
         }
       });
-      fromSheet.forEach(cat => {
+      sheetOrder.forEach(cat => {
         if (!used.has(cat)) {
           used.add(cat);
           categories.push(cat);
@@ -649,6 +669,12 @@
       if (!selectedCat || !products.some(p => p.category === selectedCat)) {
         selectedCat = categories[0] || null;
       }
+    }
+
+    function productsInCategory(cat) {
+      return products
+        .filter(p => p.category === cat)
+        .sort((a, b) => (a.sheetOrder || 0) - (b.sheetOrder || 0));
     }
 
     // ─── Pricing ────────────────────────────────────────────────
@@ -662,11 +688,19 @@
       return applicable.reduce((best, t) => (t.min > best.min ? t : best)).price;
     }
 
+    function formatTierRangeLabel(min, max, unitName) {
+      const u = unitName || 'แผ่น';
+      if (!isFinite(max)) return `${min} ${u}ขึ้นไป`;
+      return `${min}-${max} ${u}`;
+    }
+
     function getActiveTierLabel(product, qty) {
       if (!product.tiers.length || qty <= 0) return '-';
       const applicable = product.tiers.filter(t => qty >= t.min && qty <= t.max);
-      if (!applicable.length) return product.tiers[product.tiers.length - 1].label;
-      return applicable.reduce((best, t) => (t.min > best.min ? t : best)).label;
+      const tier = applicable.length
+        ? applicable.reduce((best, t) => (t.min > best.min ? t : best))
+        : product.tiers[product.tiers.length - 1];
+      return formatTierRangeLabel(tier.min, tier.max, productUnit(product));
     }
 
     function formatPrice(n) {
@@ -691,7 +725,7 @@
     // ─── Render Categories ──────────────────────────────────────
     function renderCategories() {
       const makeBtn = (cat) => {
-        const count = products.filter(p => p.category === cat).length;
+        const count = productsInCategory(cat).length;
         const btn = document.createElement('button');
         btn.className = `category-item w-full text-left px-4 py-3 rounded-xl text-base font-medium transition-all duration-200
           ${cat === selectedCat ? 'active' : 'text-wood-700 hover:bg-wood-100'}`;
@@ -723,7 +757,7 @@
 
     // ─── Render Products ────────────────────────────────────────
     function renderProducts() {
-      const filtered = products.filter(p => p.category === selectedCat);
+      const filtered = productsInCategory(selectedCat);
       $('#selectedCategoryTitle').textContent = selectedCat;
       $('#productCount').textContent = filtered.length ? `${filtered.length} รายการ` : 'ไม่มีสินค้า';
       const badge = $('#categoryBadge');
@@ -774,7 +808,7 @@
                     ${product.tiers.map(t => {
                       const active = qty >= t.min && qty <= t.max;
                       return `<tr class="${active ? 'bg-wood-200/60 font-semibold text-wood-800' : 'text-wood-600'}">
-                        <td class="py-2 pr-3">${t.label}</td>
+                        <td class="py-2 pr-3">${formatTierRangeLabel(t.min, t.max, unitName)}</td>
                         <td class="py-2 text-right">${formatPrice(t.price)}</td>
                       </tr>`;
                     }).join('')}
