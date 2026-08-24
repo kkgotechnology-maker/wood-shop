@@ -996,29 +996,31 @@
 
       let total = 0;
       const lines = [
-        '🪵 ใบสั่งซื้อ บริษัท.ยู.โอ.ที.เทรดดิ้ง จำกัด',
-        '─────────────────',
+        'ใบสั่งซื้อ',
+        'บจก.ยู.โอ.ที.เทรดดิ้ง',
+        '---',
         `ชื่อลูกค้า: ${info.name}`,
         `ที่อยู่: ${info.address}`,
         `อำเภอ: ${info.district}`,
         `จังหวัด: ${info.province}`,
         `เบอร์ติดต่อ: ${info.phone}`,
-        '─────────────────',
+        '---',
       ];
 
       items.forEach(({ product, qty }, i) => {
         const unit = getUnitPrice(product, qty);
         const sub  = unit * qty;
         total += sub;
-        lines.push(`${i + 1}. ${product.name}`);
-        lines.push(`   จำนวน: ${qty} แผ่น`);
-        lines.push(`   รวม: ${formatPrice(sub)}`);
+        lines.push(`รายการไม้อัด: ${product.name}`);
+        lines.push(`จำนวน ${qty} x ${formatPrice(unit)}`);
+        lines.push(`รวม ${formatPrice(sub)}`);
+        if (i < items.length - 1) lines.push('');
       });
 
-      lines.push('─────────────────');
-      lines.push(`💰 ยอดรวมทั้งหมด: ${formatPrice(total)}`);
+      lines.push('---');
+      lines.push(`ยอดรวมทั้งหมด: ${formatPrice(total)}`);
       lines.push('');
-      lines.push('กรุณาติดต่อกลับเพื่อยืนยันคำสั่งซื้อ ขอบคุณครับ 🙏');
+      lines.push('ยืนยันคำสั่งซื้อ ขอบคุณครับ');
 
       const message = lines.join('\n');
       const lineUrl = `https://line.me/R/oaMessage/@770oqmct/?${encodeURIComponent(message)}`;
