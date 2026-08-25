@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ติดต่อกลับ | บจก.ยู.โอ.ที.เทรดดิ้ง</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            wood: {
+              50: '#f3f8f4',
+              100: '#dcefe0',
+              200: '#b8d9be',
+              300: '#7fb88a',
+              400: '#4d9a5c',
+              500: '#357a43',
+              600: '#2a6136',
+              700: '#234c2c',
+              800: '#1b3a23',
+              900: '#14281a',
+            },
+          },
+          fontFamily: {
+            sans: ['"Sarabun"', 'system-ui', 'sans-serif'],
+          },
+        },
+      },
+    };
+  </script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;500;600;700&display=swap" rel="stylesheet" />
+</head>
+<body class="bg-wood-50 font-sans text-wood-900 min-h-screen">
+
+  <header class="sticky top-0 z-40 bg-white/90 backdrop-blur-md border-b border-wood-200 shadow-sm">
+    <div class="max-w-xl mx-auto px-4 py-3 flex items-center gap-3">
+      <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-wood-600 to-wood-400 flex items-center justify-center text-white text-lg font-bold shadow">🪵</div>
+      <div>
+        <h1 class="text-lg font-bold text-wood-800 leading-tight">บจก.ยู.โอ.ที.เทรดดิ้ง</h1>
+        <p class="text-sm text-wood-500">ติดต่อกลับ</p>
+      </div>
+    </div>
+  </header>
+
+  <main class="max-w-xl mx-auto px-4 py-6">
+    <div class="bg-white rounded-2xl shadow-sm border border-wood-200 overflow-hidden">
+      <div class="px-5 py-4 bg-wood-800 text-white">
+        <h2 class="font-bold text-lg">กรอกรายละเอียดติดต่อกลับ</h2>
+        <p class="text-wood-300 text-sm mt-0.5">ฝากชื่อ เบอร์โทร และข้อความ แล้วกดส่งได้เลย</p>
+      </div>
+
+      <form id="contactForm" class="p-5 space-y-4">
+        <div>
+          <label for="contactName" class="block text-sm font-semibold text-wood-800 mb-1.5">ชื่อ</label>
+          <input id="contactName" name="name" type="text" autocomplete="name" required
+            placeholder="เช่น คุณสมชาย"
+            class="w-full px-4 py-3 rounded-xl border border-wood-200 bg-wood-50 text-wood-900 placeholder:text-wood-400 focus:outline-none focus:ring-2 focus:ring-wood-500 focus:border-wood-500" />
+        </div>
+
+        <div>
+          <label for="contactPhone" class="block text-sm font-semibold text-wood-800 mb-1.5">เบอร์โทร</label>
+          <input id="contactPhone" name="phone" type="tel" inputmode="tel" autocomplete="tel" required
+            placeholder="เช่น 0812345678"
+            class="w-full px-4 py-3 rounded-xl border border-wood-200 bg-wood-50 text-wood-900 placeholder:text-wood-400 focus:outline-none focus:ring-2 focus:ring-wood-500 focus:border-wood-500" />
+        </div>
+
+        <div>
+          <label for="contactMessage" class="block text-sm font-semibold text-wood-800 mb-1.5">ข้อความ</label>
+          <textarea id="contactMessage" name="message" rows="5" required
+            placeholder="เช่น สนใจไม้อัดยาง ต้องการให้ติดต่อกลับ"
+            class="w-full px-4 py-3 rounded-xl border border-wood-200 bg-wood-50 text-wood-900 placeholder:text-wood-400 focus:outline-none focus:ring-2 focus:ring-wood-500 focus:border-wood-500 resize-y min-h-[120px]"></textarea>
+        </div>
+
+        <p id="contactError" class="hidden text-sm text-red-600"></p>
+        <p id="contactSuccess" class="hidden text-sm text-wood-700 bg-wood-100 rounded-xl px-4 py-3"></p>
+
+        <button type="submit"
+          class="w-full py-3.5 rounded-xl bg-wood-600 hover:bg-wood-700 text-white font-bold transition shadow-sm">
+          ส่งข้อความติดต่อกลับ
+        </button>
+      </form>
+    </div>
+  </main>
+
+  <script>
+    const LINE_OA = '@770oqmct';
+    const form = document.getElementById('contactForm');
+    const errorEl = document.getElementById('contactError');
+    const successEl = document.getElementById('contactSuccess');
+
+    function showError(msg) {
+      errorEl.textContent = msg;
+      errorEl.classList.remove('hidden');
+      successEl.classList.add('hidden');
+    }
+
+    function showSuccess(msg) {
+      successEl.textContent = msg;
+      successEl.classList.remove('hidden');
+      errorEl.classList.add('hidden');
+    }
+
+    form.addEventListener('submit', (e) => {
+      e.preventDefault();
+      const name = (document.getElementById('contactName').value || '').trim();
+      const phone = (document.getElementById('contactPhone').value || '').trim();
+      const message = (document.getElementById('contactMessage').value || '').trim();
+
+      if (!name || !phone || !message) {
+        showError('กรุณากรอกชื่อ เบอร์โทร และข้อความให้ครบ');
+        return;
+      }
+
+      const lines = [
+        'ข้อความติดต่อกลับ',
+        'บจก.ยู.โอ.ที.เทรดดิ้ง',
+        '---',
+        'ชื่อ: ' + name,
+        'เบอร์โทร: ' + phone,
+        'ข้อความ: ' + message,
+      ];
+      const text = lines.join('\n');
+      const lineUrl = 'https://line.me/R/oaMessage/' + LINE_OA + '/?' + encodeURIComponent(text);
+
+      window.open(lineUrl, '_blank');
+      showSuccess('เปิด LINE เพื่อส่งข้อความติดต่อกลับแล้ว');
+    });
+  </script>
+</body>
+</html>
