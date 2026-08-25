@@ -792,8 +792,8 @@
         const card = document.createElement('div');
         card.className = 'product-panel bg-wood-50 rounded-2xl border border-wood-200 p-4 sm:p-5';
         card.innerHTML = `
-          <div class="flex flex-col sm:flex-row sm:items-start gap-4">
-            <div class="w-full sm:w-24 h-24 rounded-xl bg-wood-200 flex items-center justify-center text-3xl shrink-0 overflow-hidden">
+          <div class="flex flex-col gap-4">
+            <div class="w-full max-w-[800px] mx-auto aspect-square rounded-xl bg-wood-200 flex items-center justify-center text-3xl shrink-0 overflow-hidden">
               ${product.image
                 ? `<img src="${product.image.replace(/"/g, '&quot;')}" alt="${product.name.replace(/"/g, '&quot;')}" class="w-full h-full object-cover" loading="lazy" referrerpolicy="no-referrer" onerror="this.replaceWith(document.createTextNode('🪵'))">`
                 : '🪵'}
