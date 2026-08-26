@@ -262,7 +262,8 @@
     const CSV_URL  = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/export?format=csv`;
     const GVIZ_URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:json`;
 
-    // ลำดับประเภทกลุ่ม = ตามคอลัมน์ E ในชีต (เจอค่าใหม่ครั้งแรกเรียงก่อน)
+    // ลำดับประเภทกลุ่ม: ยึดคอลัมน์ E ในชีต จากบนลงล่าง โดยขึ้นต้นด้วยหมวดนี้ก่อน
+    const CATEGORY_FIRST = 'ไม้อัดMDFยาง';
     const CATEGORY_ALIASES = {
       'ไม้้ฟิล์มดำ': 'ไม้อัดฟิล์มดำ',
       'ประตููไม้อัดยาง': 'ประตูไม้อัดยาง',
@@ -644,15 +645,22 @@
       }
     }
 
-    // ─── Categories (ลำดับแท็บ = ลำดับคอลัมน์ E ใน Google Sheets) ─
+    // ─── Categories (คอลัมน์ E จากบนลงล่าง เริ่มที่ ไม้อัดMDFยาง) ─
     function buildCategories() {
+      const sheetOrder = [];
       const seen = new Set();
-      categories = [];
       products.forEach(p => {
         if (p.category && !seen.has(p.category)) {
           seen.add(p.category);
-          categories.push(p.category);
+          sheetOrder.push(p.category);
         }
+      });
+
+      const first = normalizeCategory(CATEGORY_FIRST);
+      categories = [];
+      if (seen.has(first)) categories.push(first);
+      sheetOrder.forEach(cat => {
+        if (cat !== first) categories.push(cat);
       });
 
       if (!selectedCat || !products.some(p => p.category === selectedCat)) {
