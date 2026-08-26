@@ -262,24 +262,7 @@
     const CSV_URL  = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/export?format=csv`;
     const GVIZ_URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:json`;
 
-    // ลำดับแท็บหมวดหมู่ (ยึดกลุ่มจากคอลัมน์ E เป็นหลัก แสดงเฉพาะหมวดที่มีสินค้า)
-    const CATEGORY_ORDER = [
-      'ไม้อัดยาง',
-      'ไม้อัดฟิล์มดำ',
-      'ไม้บอร์ดลาย/ขาว',
-      'ไม้อัดตกแต่งภายใน',
-      'ไม้อัดMDFยาง',
-      'ไม้อัดMDFเปลือย',
-      'ไม้อัดปาติเกิ้ล',
-      'ไม้อัดHMR',
-      'กลุ่มอื่นๆ',
-      'ประตููไม้อัดยาง',
-      'ประตูไม้อัดยาง',
-      'ประตููไม้อัดสัก',
-      'ประตูไม้อัดสัก',
-      'ประตูลูกฟัก',
-    ];
-
+    // ลำดับประเภทกลุ่ม = ตามคอลัมน์ E ในชีต (เจอค่าใหม่ครั้งแรกเรียงก่อน)
     const CATEGORY_ALIASES = {
       'ไม้้ฟิล์มดำ': 'ไม้อัดฟิล์มดำ',
       'ประตููไม้อัดยาง': 'ประตูไม้อัดยาง',
@@ -661,31 +644,14 @@
       }
     }
 
-    // ─── Categories (กลุ่มตามคอลัมน์ E แล้วเรียงสินค้าตามลำดับในชีต) ─
+    // ─── Categories (ลำดับแท็บ = ลำดับคอลัมน์ E ใน Google Sheets) ─
     function buildCategories() {
-      const sheetOrder = [];
       const seen = new Set();
+      categories = [];
       products.forEach(p => {
         if (p.category && !seen.has(p.category)) {
           seen.add(p.category);
-          sheetOrder.push(p.category);
-        }
-      });
-
-      categories = [];
-      const used = new Set();
-      CATEGORY_ORDER.forEach(cat => {
-        const norm = normalizeCategory(cat);
-        if (used.has(norm)) return;
-        if (seen.has(norm)) {
-          used.add(norm);
-          categories.push(norm);
-        }
-      });
-      sheetOrder.forEach(cat => {
-        if (!used.has(cat)) {
-          used.add(cat);
-          categories.push(cat);
+          categories.push(p.category);
         }
       });
 
