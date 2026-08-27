@@ -84,7 +84,7 @@
       aspect-ratio: 1280 / 720;
       border-radius: 0.75rem;
       overflow: hidden;
-      background: #b8d9be;
+      background: #dcefe0;
     }
     .product-image-frame img {
       position: absolute;
@@ -92,6 +92,34 @@
       width: 100%;
       height: 100%;
       object-fit: cover;
+    }
+    .product-image-placeholder {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 0.35rem;
+      background:
+        repeating-linear-gradient(
+          -45deg,
+          #dcefe0,
+          #dcefe0 14px,
+          #c5dcc9 14px,
+          #c5dcc9 28px
+        );
+      color: #2a6136;
+      pointer-events: none;
+    }
+    .product-image-placeholder strong {
+      font-size: 1.35rem;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+    }
+    .product-image-placeholder span {
+      font-size: 0.9rem;
+      opacity: 0.8;
     }
   </style>
 </head>
@@ -784,10 +812,11 @@
         card.className = 'product-panel bg-wood-50 rounded-2xl border border-wood-200 p-4 sm:p-5';
         card.innerHTML = `
           <div class="flex flex-col gap-4">
-            <div class="product-image-frame flex items-center justify-center text-3xl">
+            <div class="product-image-frame">
               ${product.image
-                ? `<img src="${product.image.replace(/"/g, '&quot;')}" alt="${product.name.replace(/"/g, '&quot;')}" loading="lazy" referrerpolicy="no-referrer" onerror="this.replaceWith(document.createTextNode('🪵'))">`
-                : '🪵'}
+                ? `<img src="${product.image.replace(/"/g, '&quot;')}" alt="${product.name.replace(/"/g, '&quot;')}" loading="lazy" referrerpolicy="no-referrer" onerror="this.style.display='none'; this.nextElementSibling.hidden=false">
+                   <div class="product-image-placeholder" hidden><strong>1280x720px</strong><span>ยังไม่มีรูปภาพ</span></div>`
+                : `<div class="product-image-placeholder"><strong>1280x720px</strong><span>ยังไม่มีรูปภาพ</span></div>`}
             </div>
             <div class="flex-1 min-w-0">
               <h3 class="font-bold text-wood-800 text-lg">${product.name}</h3>
@@ -1029,7 +1058,6 @@
           }
         }
 
-        
         return { name, address, district, province, phone };
       } catch (e) {
         return emptyShippingInfo();
