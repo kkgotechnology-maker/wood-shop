@@ -1,0 +1,338 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>โปรโมชั่น | บจก.ยู.โอ.ที.เทรดดิ้ง</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            wood: {
+              50: '#f3f8f4',
+              100: '#dcefe0',
+              200: '#b8d9be',
+              300: '#7fb88a',
+              400: '#4d9a5c',
+              500: '#357a43',
+              600: '#2a6136',
+              700: '#234c2c',
+              800: '#1b3a23',
+              900: '#14281a',
+            },
+          },
+          fontFamily: {
+            sans: ['"Sarabun"', 'system-ui', 'sans-serif'],
+          },
+        },
+      },
+    };
+  </script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <style>
+    .promo-card { animation: promoIn 0.35s ease-out; }
+    @keyframes promoIn {
+      from { opacity: 0; transform: translateY(12px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+    .promo-image {
+      position: relative;
+      width: 100%;
+      aspect-ratio: 1280 / 720;
+      overflow: hidden;
+      background: #dcefe0;
+    }
+    .promo-image img {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+    .promo-image-placeholder {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 0.25rem;
+      background: repeating-linear-gradient(-45deg, #dcefe0, #dcefe0 14px, #c5dcc9 14px, #c5dcc9 28px);
+      color: #2a6136;
+    }
+  </style>
+</head>
+<body class="bg-wood-50 font-sans text-wood-900 min-h-screen">
+
+  <header class="sticky top-0 z-40 bg-white/90 backdrop-blur-md border-b border-wood-200 shadow-sm">
+    <div class="max-w-xl mx-auto px-4 py-3 flex items-center gap-3">
+      <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-wood-600 to-wood-400 flex items-center justify-center text-white text-lg font-bold shadow">🪵</div>
+      <div class="min-w-0">
+        <h1 class="text-lg font-bold text-wood-800 leading-tight">โปรโมชั่น</h1>
+        <p class="text-sm text-wood-500">บจก.ยู.โอ.ที.เทรดดิ้ง</p>
+      </div>
+    </div>
+  </header>
+
+  <main class="max-w-xl mx-auto px-4 py-5">
+    <div id="loadingScreen" class="flex flex-col items-center justify-center gap-3 py-20">
+      <div class="w-11 h-11 border-4 border-wood-200 border-t-wood-600 rounded-full animate-spin"></div>
+      <p class="text-wood-600 font-medium">กำลังโหลดโปรโมชั่น...</p>
+    </div>
+
+    <div id="errorScreen" class="hidden text-center py-16 px-4">
+      <p class="text-wood-800 font-semibold text-lg">ไม่สามารถโหลดโปรโมชั่นได้</p>
+      <p id="errorMessage" class="text-wood-500 text-sm mt-2"></p>
+      <button onclick="loadPromotions()" class="mt-4 px-6 py-2.5 bg-wood-600 text-white rounded-xl font-medium">ลองใหม่</button>
+    </div>
+
+    <div id="emptyScreen" class="hidden text-center py-16 px-4">
+      <p class="text-wood-800 font-semibold text-lg">ยังไม่มีโปรโมชั่น</p>
+      <p class="text-wood-500 text-sm mt-2">เมื่อมีรายการที่สถานะ "แสดงผล" จะปรากฏที่นี่</p>
+    </div>
+
+    <div id="promoList" class="hidden space-y-5"></div>
+  </main>
+
+  <script>
+    const SHEET_ID = '1mYgdp2nt7ojfLNjFbbQRoNEZoP-flIbAyKxw3wNhNDU';
+    const SHEET_NAME = 'โปรโมชั่น';
+    const GVIZ_URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:json&sheet=${encodeURIComponent(SHEET_NAME)}`;
+    const CSV_URL  = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(SHEET_NAME)}`;
+
+    const COL = { status: 0, title: 1, image: 2, textStart: 3 };
+
+    const $ = (sel) => document.querySelector(sel);
+    const loadingScreen = $('#loadingScreen');
+    const errorScreen   = $('#errorScreen');
+    const emptyScreen   = $('#emptyScreen');
+    const promoList     = $('#promoList');
+
+    function looksLikeUrl(s) {
+      return /^https?:\/\//i.test(s) || /drive\.google\.com/i.test(s);
+    }
+
+    function toDriveImageUrl(url) {
+      const raw = (url || '').trim();
+      if (!raw || !looksLikeUrl(raw)) return '';
+      if (/lh3\.googleusercontent\.com\/d\//i.test(raw)) return raw;
+
+      let id = null;
+      const patterns = [
+        /\/file\/d\/([a-zA-Z0-9_-]+)/,
+        /[?&]id=([a-zA-Z0-9_-]+)/,
+        /drive\.google\.com\/uc\?[^#]*id=([a-zA-Z0-9_-]+)/,
+        /drive\.google\.com\/open\?[^#]*id=([a-zA-Z0-9_-]+)/,
+      ];
+      for (const re of patterns) {
+        const m = raw.match(re);
+        if (m) { id = m[1]; break; }
+      }
+      return id ? `https://lh3.googleusercontent.com/d/${id}` : raw;
+    }
+
+    function isVisible(status) {
+      const s = (status || '').trim();
+      if (!s) return false;
+      if (s.includes('ไม่แสดงผล')) return false;
+      return s.includes('แสดงผล');
+    }
+
+    function parseCSV(text) {
+      const cleaned = String(text || '').replace(/^\uFEFF/, '');
+      let cur = '', inQuote = false;
+      const lines = [];
+      for (let i = 0; i < cleaned.length; i++) {
+        const ch = cleaned[i];
+        if (ch === '"') {
+          inQuote = !inQuote;
+        } else if ((ch === '\n' || ch === '\r') && !inQuote) {
+          if (cur || lines.length) { lines.push(cur); cur = ''; }
+          if (ch === '\r' && cleaned[i + 1] === '\n') i++;
+        } else {
+          cur += ch;
+        }
+      }
+      if (cur) lines.push(cur);
+
+      return lines.map(line => {
+        const cols = [];
+        let cell = '', q = false;
+        for (let i = 0; i < line.length; i++) {
+          const c = line[i];
+          if (c === '"') q = !q;
+          else if (c === ',' && !q) { cols.push(cell.trim()); cell = ''; }
+          else cell += c;
+        }
+        cols.push(cell.trim());
+        return cols;
+      }).filter(row => row.some(c => c !== ''));
+    }
+
+    function parseGvizPayload(text) {
+      const start = text.indexOf('{');
+      const end = text.lastIndexOf('}');
+      if (start < 0 || end < 0) throw new Error('Invalid GViz response');
+      const json = JSON.parse(text.slice(start, end + 1));
+      const cols = json.table.cols || [];
+      const headersFromLabel = cols.map((c, i) => {
+        const label = (c.label || '').trim();
+        const defaults = ['การแสดงผล', 'รายการโปรโมชั่น', 'รูปภาพประกอบ', 'ข้อความ1', 'ข้อความ2', 'ข้อความ3', 'ข้อความ4'];
+        return label || defaults[i] || `คอลัมน์${i + 1}`;
+      });
+      const dataRows = (json.table.rows || []).map(r => {
+        const cells = r.c || [];
+        return cols.map((_, i) => {
+          const c = cells[i];
+          return c && c.v != null ? String(c.v).trim() : '';
+        });
+      });
+
+      const firstIsHeader = /การแสดงผล|รายการโปรโมชั่น|รูปภาพประกอบ/.test(
+        [(dataRows[0] || [])[0], (dataRows[0] || [])[1], (dataRows[0] || [])[2]].join(' ')
+      );
+      if (firstIsHeader) return dataRows;
+      return [headersFromLabel, ...dataRows];
+    }
+
+    async function fetchCSV() {
+      const res = await fetch(CSV_URL, { cache: 'no-store' });
+      if (!res.ok) throw new Error(`CSV HTTP ${res.status}`);
+      const text = await res.text();
+      if (/^\s*<(!DOCTYPE|html)/i.test(text)) throw new Error('CSV returned HTML');
+      return parseCSV(text);
+    }
+
+    async function fetchGviz() {
+      const res = await fetch(GVIZ_URL, { cache: 'no-store' });
+      if (!res.ok) throw new Error(`GViz HTTP ${res.status}`);
+      return parseGvizPayload(await res.text());
+    }
+
+    function fetchGvizJsonp() {
+      return new Promise((resolve, reject) => {
+        const cbName = `_promoCb_${Date.now()}`;
+        const script = document.createElement('script');
+        const timer = setTimeout(() => { cleanup(); reject(new Error('GViz JSONP timeout')); }, 15000);
+        function cleanup() {
+          clearTimeout(timer);
+          delete window[cbName];
+          script.remove();
+        }
+        window[cbName] = (data) => {
+          try {
+            const json = typeof data === 'object' ? data : JSON.parse(data);
+            cleanup();
+            resolve(parseGvizPayload(JSON.stringify(json)));
+          } catch (e) {
+            cleanup();
+            reject(e);
+          }
+        };
+        script.onerror = () => { cleanup(); reject(new Error('GViz JSONP failed')); };
+        script.src = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:json;responseHandler:${cbName}&sheet=${encodeURIComponent(SHEET_NAME)}`;
+        document.head.appendChild(script);
+      });
+    }
+
+    function buildPromos(rows) {
+      if (!rows.length) return [];
+      const header = rows[0].map(c => String(c || '').replace(/^\uFEFF/, '').trim());
+      const isHeader = /การแสดงผล/.test(header[COL.status]) || /รายการโปรโมชั่น/.test(header[COL.title]);
+      const dataRows = isHeader ? rows.slice(1) : rows;
+
+      return dataRows.map((row, idx) => {
+        const status = (row[COL.status] || '').trim();
+        if (!isVisible(status)) return null;
+        const title = (row[COL.title] || '').trim();
+        if (!title) return null;
+        const details = row.slice(COL.textStart)
+          .map(v => String(v || '').trim())
+          .filter(Boolean);
+        return {
+          id: `promo-${idx}`,
+          title,
+          image: toDriveImageUrl(row[COL.image] || ''),
+          details,
+        };
+      }).filter(Boolean);
+    }
+
+    function escapeHtml(s) {
+      return String(s)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
+    }
+
+    function renderPromos(promos) {
+      promoList.innerHTML = promos.map((p, i) => {
+        const img = p.image
+          ? `<img src="${escapeHtml(p.image)}" alt="${escapeHtml(p.title)}" loading="lazy" referrerpolicy="no-referrer" onerror="this.style.display='none'; this.nextElementSibling.hidden=false">
+             <div class="promo-image-placeholder" hidden><strong>1280x720px</strong><span>ยังไม่มีรูปภาพ</span></div>`
+          : `<div class="promo-image-placeholder"><strong>1280x720px</strong><span>ยังไม่มีรูปภาพ</span></div>`;
+
+        const details = p.details.length
+          ? `<ul class="p-4 space-y-2.5">${p.details.map(d => `
+              <li class="flex items-start gap-3 text-wood-800">
+                <span class="mt-0.5 shrink-0 w-6 h-6 rounded-full bg-wood-100 text-wood-700 flex items-center justify-center text-xs font-bold">%</span>
+                <span class="text-base leading-snug">${escapeHtml(d)}</span>
+              </li>`).join('')}</ul>`
+          : '';
+
+        return `
+          <article class="promo-card bg-white rounded-3xl shadow-sm border border-wood-200 overflow-hidden" style="animation-delay:${i * 60}ms">
+            <div class="promo-image">${img}</div>
+            <div class="px-4 pt-4 pb-1">
+              <span class="inline-flex items-center px-2.5 py-0.5 rounded-full bg-wood-600 text-white text-xs font-semibold tracking-wide">โปรโมชั่น</span>
+              <h2 class="mt-2 font-bold text-xl text-wood-800 leading-snug">${escapeHtml(p.title)}</h2>
+            </div>
+            ${details}
+          </article>`;
+      }).join('');
+    }
+
+    async function loadPromotions() {
+      loadingScreen.classList.remove('hidden');
+      errorScreen.classList.add('hidden');
+      emptyScreen.classList.add('hidden');
+      promoList.classList.add('hidden');
+
+      try {
+        let rows = null;
+        const errors = [];
+        try { rows = await fetchGviz(); } catch (e) { errors.push(e.message); }
+        if (!rows || rows.length < 1) {
+          try { rows = await fetchCSV(); } catch (e) { errors.push(e.message); }
+        }
+        if (!rows || rows.length < 1) {
+          try { rows = await fetchGvizJsonp(); } catch (e) { errors.push(e.message); }
+        }
+        if (!rows || rows.length < 1) {
+          throw new Error(errors.join(' | ') || 'โหลดข้อมูลไม่สำเร็จ');
+        }
+
+        const promos = buildPromos(rows);
+        loadingScreen.classList.add('hidden');
+        if (!promos.length) {
+          emptyScreen.classList.remove('hidden');
+          return;
+        }
+        renderPromos(promos);
+        promoList.classList.remove('hidden');
+      } catch (err) {
+        loadingScreen.classList.add('hidden');
+        errorScreen.classList.remove('hidden');
+        $('#errorMessage').textContent = err.message || 'เกิดข้อผิดพลาดไม่ทราบสาเหตุ';
+      }
+    }
+
+    loadPromotions();
+  </script>
+</body>
+</html>
