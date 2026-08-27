@@ -53,17 +53,6 @@
       height: 100%;
       object-fit: cover;
     }
-    .promo-image-placeholder {
-      position: absolute;
-      inset: 0;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      gap: 0.25rem;
-      background: repeating-linear-gradient(-45deg, #dcefe0, #dcefe0 14px, #c5dcc9 14px, #c5dcc9 28px);
-      color: #2a6136;
-    }
   </style>
 </head>
 <body class="bg-wood-50 font-sans text-wood-900 min-h-screen">
@@ -272,10 +261,11 @@
 
     function renderPromos(promos) {
       promoList.innerHTML = promos.map((p, i) => {
-        const img = p.image
-          ? `<img src="${escapeHtml(p.image)}" alt="${escapeHtml(p.title)}" loading="lazy" referrerpolicy="no-referrer" onerror="this.style.display='none'; this.nextElementSibling.hidden=false">
-             <div class="promo-image-placeholder" hidden><strong>1280x720px</strong><span>ยังไม่มีรูปภาพ</span></div>`
-          : `<div class="promo-image-placeholder"><strong>1280x720px</strong><span>ยังไม่มีรูปภาพ</span></div>`;
+        const imgBlock = p.image
+          ? `<div class="promo-image">
+               <img src="${escapeHtml(p.image)}" alt="${escapeHtml(p.title)}" loading="lazy" referrerpolicy="no-referrer" onerror="this.closest('.promo-image').style.display='none'">
+             </div>`
+          : '';
 
         const details = p.details.length
           ? `<ul class="p-4 space-y-2.5">${p.details.map(d => `
@@ -287,7 +277,7 @@
 
         return `
           <article class="promo-card bg-white rounded-3xl shadow-sm border border-wood-200 overflow-hidden" style="animation-delay:${i * 60}ms">
-            <div class="promo-image">${img}</div>
+            ${imgBlock}
             <div class="px-4 pt-4 pb-1">
               <span class="inline-flex items-center px-2.5 py-0.5 rounded-full bg-wood-600 text-white text-xs font-semibold tracking-wide">โปรโมชั่น</span>
               <h2 class="mt-2 font-bold text-xl text-wood-800 leading-snug">${escapeHtml(p.title)}</h2>
