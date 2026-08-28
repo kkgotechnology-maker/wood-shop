@@ -318,8 +318,8 @@
       'ไม้อัดHRM': 'ไม้อัดHMR',
     };
 
-    // คอลัมน์เริ่มต้นตามชีต: A สถานะ | B รูป | C ชื่อ | D ลักษณะนาม | E หมวด | F+ ราคา
-    const COL_DEFAULT = { status: 0, image: 1, name: 2, unit: 3, category: 4, priceStart: 5 };
+    // คอลัมน์เริ่มต้นตามชีต: A สถานะ | B รูป | C ชื่อ | D ลักษณะนาม | E หมวด | F ลักษณะไม้ | G การใช้งาน | H+ ราคา
+    const COL_DEFAULT = { status: 0, image: 1, name: 2, unit: 3, category: 4, detailF: 5, detailG: 6, priceStart: 7 };
     const KNOWN_UNITS = ['แผ่น', 'ตัว', 'บาน', 'ม้วน'];
     const UNIT_ALIASES = { 'ม่วน': 'ม้วน', 'มวน': 'ม้วน' };
 
@@ -387,13 +387,18 @@
         const i = h.findIndex(name => re.test(name));
         return i >= 0 ? i : fallback;
       };
-      const priceStart = h.findIndex((name, i) => i >= COL_DEFAULT.priceStart && parseTierHeader(name));
+      const detailF = idx(/ลักษณะไม้/, COL_DEFAULT.detailF);
+      const detailG = idx(/การใช้งาน/, COL_DEFAULT.detailG);
+      const priceSearchFrom = Math.max(COL_DEFAULT.priceStart, detailF + 1, detailG + 1);
+      const priceStart = h.findIndex((name, i) => i >= priceSearchFrom && parseTierHeader(name));
       return {
         status: idx(/แสดงผล/, COL_DEFAULT.status),
         image: idx(/รูปสินค้า|รูปภาพ/, COL_DEFAULT.image),
         name: idx(/รายละเอียดสินค้า|ชื่อสินค้า/, COL_DEFAULT.name),
         unit: idx(/ลักษณะนาม|หน่วยนับ/, COL_DEFAULT.unit),
         category: idx(/ประเภทกลุ่มสินค้า|ประเภทกลุ่ม|หมวดหมู่/, COL_DEFAULT.category),
+        detailF,
+        detailG,
         priceStart: priceStart >= 0 ? priceStart : COL_DEFAULT.priceStart,
       };
     }
@@ -440,9 +445,17 @@
       return true;
     }
 
+    function escapeHtml(s) {
+      return String(s || '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
+    }
+
     /**
      * แยกฟิลด์จากแถว
-     * โครงสร้างปกติ: A สถานะ | B รูป | C ชื่อ | D ลักษณะนาม | E หมวด | F+ ราคา
+     * โครงสร้างปกติ: A สถานะ | B รูป | C ชื่อ | D ลักษณะนาม | E หมวด | F ลักษณะไม้ | G การใช้งาน | H+ ราคา
      * แถวที่ไม่มีรูปมักใส่ชื่อใน B แล้วเลื่อนคอลัมน์ไปทางซ้าย → แก้ให้อัตโนมัติ
      */
     function extractRowFields(row, col) {
@@ -470,7 +483,11 @@
         category = swapped;
       }
 
-      return { status, imageRaw, name, unit, category, priceShift };
+      const cell = (i) => String(row[i + priceShift] || '').trim();
+      const detailF = cell(col.detailF);
+      const detailG = cell(col.detailG);
+
+      return { status, imageRaw, name, unit, category, detailF, detailG, priceShift };
     }
 
     // ─── Parse CSV ──────────────────────────────────────────────
@@ -541,6 +558,8 @@
           sheetOrder: idx,
           name: fields.name,
           category: cat,
+          detailF: fields.detailF,
+          detailG: fields.detailG,
           unit: normalizeUnit(fields.unit, cat, fields.name),
           image: toDriveImageUrl(fields.imageRaw),
           tiers,
@@ -569,7 +588,7 @@
         const label = (c.label || '').trim();
         if (label) return label;
         // fallback ชื่อคอลัมน์มาตรฐานถ้า label ว่าง
-        const defaults = ['การแสดงผล', 'รูปสินค้า', 'รายละเอียดสินค้า', 'ลักษณะนาม', 'ประเภทกลุ่มสินค้า'];
+        const defaults = ['การแสดงผล', 'รูปสินค้า', 'รายละเอียดสินค้า', 'ลักษณะนาม', 'ประเภทกลุ่มสินค้า', 'ลักษณะไม้', 'การใช้งาน'];
         return defaults[i] || `ราคาคอลัมน์${i + 1}`;
       });
       const dataRows = (json.table.rows || []).map(r => {
@@ -839,8 +858,11 @@
                 : `<div class="product-image-placeholder"><strong>1280x720px</strong><span>ยังไม่มีรูปภาพ</span></div>`}
             </div>
             <div class="flex-1 min-w-0">
-              <h3 class="font-bold text-wood-800 text-lg">${product.name}</h3>
-              <p class="text-wood-500 text-sm mt-0.5">${product.category}</p>
+              <h3 class="font-bold text-wood-800 text-lg">${escapeHtml(product.name)}</h3>
+              <p class="text-wood-500 text-sm mt-0.5">${escapeHtml(product.category)}</p>
+              ${[product.detailF, product.detailG].map(t => String(t || '').trim()).filter(Boolean).map(t =>
+                `<p class="text-wood-600 text-sm mt-0.5">${escapeHtml(t)}</p>`
+              ).join('')}
 
               <!-- Tier table -->
               <div class="mt-3 overflow-x-auto scrollbar-thin">
