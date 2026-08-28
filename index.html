@@ -89,11 +89,15 @@
       opacity: 1;
       transform: scale(1) translateY(0);
     }
-    .price-tier-table,
+    .price-tier-table {
+      border-collapse: collapse;
+    }
     .price-tier-table th,
     .price-tier-table td {
       font-size: 1rem;
-      line-height: 1.55;
+      line-height: 1.25;
+      padding-top: 0.15rem;
+      padding-bottom: 0.15rem;
     }
     .product-image-frame {
       position: relative;
@@ -869,16 +873,16 @@
                 <table class="price-tier-table w-full text-base">
                   <thead>
                     <tr class="text-wood-500">
-                      <th class="text-left py-2.5 pr-3 font-medium">ช่วงจำนวน</th>
-                      <th class="text-right py-2.5 font-medium">ราคา/${unitName}</th>
+                      <th class="text-left pr-3 font-medium">ช่วงจำนวน</th>
+                      <th class="text-right font-medium">ราคา/${unitName}</th>
                     </tr>
                   </thead>
                   <tbody>
                     ${product.tiers.map(t => {
                       const active = qty >= t.min && qty <= t.max;
                       return `<tr class="${active ? 'bg-wood-200/60 font-semibold text-wood-800' : 'text-wood-600'}">
-                        <td class="py-2.5 pr-3">${formatTierRangeLabel(t.min, t.max, unitName)}</td>
-                        <td class="py-2.5 text-right">${formatPrice(t.price)}</td>
+                        <td class="pr-3">${formatTierRangeLabel(t.min, t.max, unitName)}</td>
+                        <td class="text-right">${formatPrice(t.price)}</td>
                       </tr>`;
                     }).join('')}
                   </tbody>
