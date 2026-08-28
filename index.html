@@ -64,6 +64,25 @@
       animation: cartShake 1s ease-in-out;
       transform-origin: center center;
     }
+    @keyframes addCartWiggle {
+      0%, 14%, 100% { transform: rotate(0deg) scale(1); }
+      2% { transform: rotate(-10deg) scale(1.04); }
+      4% { transform: rotate(10deg) scale(1.04); }
+      6% { transform: rotate(-7deg) scale(1.03); }
+      8% { transform: rotate(6deg) scale(1.02); }
+      11% { transform: rotate(-3deg) scale(1.01); }
+    }
+    .add-cart-wiggle {
+      animation: addCartWiggle 4s ease-in-out infinite;
+      transform-origin: center center;
+    }
+    .add-cart-wiggle:hover,
+    .add-cart-wiggle:active {
+      animation-play-state: paused;
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .add-cart-wiggle { animation: none; }
+    }
     .shipping-overlay.open { opacity: 1; pointer-events: auto; }
     .shipping-modal.open { pointer-events: auto; }
     .shipping-modal.open .shipping-dialog {
@@ -745,7 +764,8 @@
         hour12: false,
       }).formatToParts(date);
       const get = (type) => parts.find(p => p.type === type)?.value || '';
-      return `${get('day')}/${get('month')}/${get('year')}   ${get('hour')}:${get('minute')}:${get('second')}`;
+      const yearBE = String(Number(get('year')) + 543);
+      return `${get('day')}/${get('month')}/${yearBE}   ${get('hour')}:${get('minute')}:${get('second')}`;
     }
 
     // ─── Render Categories ──────────────────────────────────────
@@ -855,7 +875,7 @@
                   <p class="text-xl font-bold text-wood-700">${formatPrice(unitPrice)} <span class="text-base font-normal text-wood-500">/ ${unitName}</span></p>
                   <p class="text-base text-wood-600">รวม <span class="font-semibold">${formatPrice(unitPrice * qty)}</span></p>
                 </div>
-                <button data-action="add" data-id="${product.id}" class="px-5 py-2.5 bg-wood-600 hover:bg-wood-700 text-white font-semibold text-base rounded-xl transition shadow-sm">
+                <button data-action="add" data-id="${product.id}" class="add-cart-wiggle px-5 py-2.5 bg-wood-600 hover:bg-wood-700 text-white font-semibold text-base rounded-xl transition-colors shadow-sm">
                   + ใส่ตะกร้า
                 </button>
               </div>
